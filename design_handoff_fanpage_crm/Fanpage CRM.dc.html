@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+::selection{background:rgba(37,99,235,.18)}
+input,button,select{font-family:inherit}
+input:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid var(--accent,#2563eb);outline-offset:2px}
+.crm-scroll::-webkit-scrollbar{width:10px;height:10px}
+.crm-scroll::-webkit-scrollbar-thumb{background:var(--border-strong,#d1d5db);border-radius:6px}
+tr[data-row]:hover{background:var(--row-hover,#f7f8fa)!important}
+@keyframes crmPop{from{opacity:0;transform:translateY(6px) scale(.99)}to{opacity:1;transform:none}}
+</style>
+</helmet>
+<div ref="{{ rootRef }}" class="crm-scroll" style="min-height:100vh;background:var(--bg,#f6f7f9);color:var(--text,#14171a);font-size:14px;line-height:1.45">
+
+<sc-if value="{{ isLogin }}" hint-placeholder-val="{{ true }}">
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg,#f6f7f9);padding:24px">
+  <form onSubmit="{{ onLogin }}" style="width:340px;display:flex;flex-direction:column;gap:14px;background:var(--surface,#fff);border:1px solid var(--border,#e5e7eb);border-radius:12px;padding:32px;box-shadow:0 1px 2px rgba(16,24,40,.04)">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <label style="font-size:12.5px;font-weight:500;color:var(--muted,#6b7280)">Email</label>
+      <input type="email" value="admin@crm.vn" style="height:40px;padding:0 12px;border:1px solid var(--border-strong,#d1d5db);border-radius:8px;background:var(--surface,#fff);color:var(--text,#14171a);font-size:14px">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <label style="font-size:12.5px;font-weight:500;color:var(--muted,#6b7280)">Mật khẩu</label>
+      <input type="password" value="password" style="height:40px;padding:0 12px;border:1px solid var(--border-strong,#d1d5db);border-radius:8px;background:var(--surface,#fff);color:var(--text,#14171a);font-size:14px">
+    </div>
+    <button type="submit" style="height:40px;margin-top:4px;border:none;border-radius:8px;background:var(--accent,#2563eb);color:#fff;font-size:14px;font-weight:600;cursor:pointer">Đăng nhập</button>
+  </form>
+</div>
+</sc-if>
+
+<sc-if value="{{ isApp }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;min-height:100vh">
+  <!-- Sidebar -->
+  <aside style="width:236px;flex:none;border-right:1px solid var(--border,#e5e7eb);background:var(--surface,#fff);display:flex;flex-direction:column;position:sticky;top:0;height:100vh">
+    <div style="padding:20px 18px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border,#e5e7eb)">
+      <div style="width:28px;height:28px;border-radius:7px;background:var(--accent,#2563eb);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px">F</div>
+      <div style="font-weight:600;font-size:14.5px">Fanpage CRM</div>
+    </div>
+    <nav style="padding:12px 10px;display:flex;flex-direction:column;gap:2px;flex:1">
+      <sc-for list="{{ navItems }}" as="item" hint-placeholder-count="3">
+        <button onClick="{{ item.onClick }}" style="{{ item.style }}">
+          <span style="width:18px;text-align:center">{{ item.glyph }}</span>
+          <span>{{ item.label }}</span>
+        </button>
+      </sc-for>
+      <div style="margin-top:14px;padding:10px 12px;border:1px dashed var(--border-strong,#d1d5db);border-radius:8px;font-size:11.5px;color:var(--muted,#6b7280);line-height:1.5">Số liệu mặc định <b style="color:var(--text,#14171a)">28 ngày</b> gần nhất từ Karmar. Không có bộ lọc thời gian.</div>
+    </nav>
+    <div style="padding:12px 10px;border-top:1px solid var(--border,#e5e7eb);display:flex;flex-direction:column;gap:8px">
+      <button onClick="{{ toggleTheme }}" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border:1px solid var(--border,#e5e7eb);border-radius:8px;background:transparent;color:var(--text,#14171a);cursor:pointer;font-size:13px">
+        <span style="display:flex;align-items:center;gap:8px"><span>{{ themeGlyph }}</span>{{ themeLabel }}</span>
+        <span style="font-size:11px;color:var(--muted,#6b7280)">{{ themeHint }}</span>
+      </button>
+      <div style="display:flex;align-items:center;gap:9px;padding:6px 6px 2px">
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--accent-soft,#eff4ff);color:var(--accent,#2563eb);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12px">AD</div>
+        <div style="line-height:1.25"><div style="font-size:12.5px;font-weight:500">Admin</div><div style="font-size:11px;color:var(--muted,#6b7280)">admin@crm.vn</div></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="crm-scroll" style="flex:1;min-width:0;height:100vh;overflow:auto">
+    <!-- Topbar -->
+    <div style="position:sticky;top:0;z-index:20;background:var(--surface,#fff);border-bottom:1px solid var(--border,#e5e7eb);padding:0 26px;height:58px;display:flex;align-items:center;gap:16px">
+      <div style="font-size:15px;font-weight:600;flex:none">{{ pageTitle }}</div>
+      <sc-if value="{{ showFilters }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;align-items:center;gap:10px;margin-left:6px">
+          <select value="{{ groupFilter }}" onChange="{{ onGroupChange }}" style="height:32px;padding:0 26px 0 10px;border:1px solid var(--border-strong,#d1d5db);border-radius:7px;background:var(--surface,#fff);color:var(--text,#14171a);font-size:12.5px;cursor:pointer">
+            <option value="all">Tất cả nhóm page</option>
+            <sc-for list="{{ groups }}" as="g" hint-placeholder-count="3"><option value="{{ g.id }}">{{ g.name }}</option></sc-for>
+          </select>
+          <select value="{{ nicheFilterVal }}" onChange="{{ onNicheChange }}" style="height:32px;padding:0 26px 0 10px;border:1px solid var(--border-strong,#d1d5db);border-radius:7px;background:var(--surface,#fff);color:var(--text,#14171a);font-size:12.5px;cursor:pointer">
+            <option value="all">Tất cả ngách</option>
+            <sc-for list="{{ niches }}" as="n" hint-placeholder-count="5"><option value="{{ n.id }}">{{ n.name }}</option></sc-for>
+          </select>
+        </div>
+      </sc-if>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted,#6b7280);border:1px solid var(--border,#e5e7eb);border-radius:20px;padding:5px 12px">
+        <span style="width:7px;height:7px;border-radius:50%;background:var(--good,#16a34a)"></span>28 ngày · Karmar
+      </div>
+    </div>
+
+    <!-- ===== DASHBOARD ===== -->
+    <sc-if value="{{ isDashboard }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:22px 26px 40px;animation:crmPop .18s ease">
+      <sc-if value="{{ nicheFilter }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+          <span style="font-size:12.5px;color:var(--muted,#6b7280)">Đang lọc theo ngách:</span>
+          <span style="display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border-radius:20px;border:1px solid {{ activeNiche.color }};background:{{ activeNiche.tint }};color:{{ activeNiche.color }};font-size:12.5px;font-weight:600">{{ activeNiche.name }}<button onClick="{{ clearNiche }}" style="border:none;background:transparent;color:inherit;cursor:pointer;font-size:14px;line-height:1;padding:0">×</button></span>
+        </div>
+      </sc-if>
+
+      <!-- KPI row -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+        <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="4">
+          <div style="background:var(--surface,#fff);border:1px solid var(--border,#e5e7eb);border-radius:11px;padding:16px 17px">
+            <div style="font-size:12px;color:var(--muted,#6b7280);font-weight:500">{{ k.label }}</div>
+            <div style="font-size:27px;font-weight:700;letter-spacing:-.5px;margin-top:7px;font-variant-numeric:tabular-nums">{{ k.value }}</div>
+            <div style="font-size:11.5px;color:var(--faint,#9ca3af);margin-top:4px">{{ k.sub }}</div>
+          </div>
+        </sc-for>
+      </div>
+
+      <!-- Charts row -->
+      <div style="display:grid;grid-template-columns:1.7fr 1fr;gap:14px;margin-top:14px">
+        <div style="background:var(--surface,#fff);border:1px solid var(--border,#e5e7eb);border-radius:11px;padding:16px 18px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline"><div style="font-size:14px;font-weight:600">Tăng trưởng lượt xem theo ngày</div><div style="font-size:11.5px;color:var(--faint,#9ca3af)">Cộng dồn {{ lineScopeLabel }} · 28 ngày</div></div>
+          <div style="height:250px;margin-top:12px;position:relative"><canvas ref="{{ lineRef }}"></canvas></div>
+        </div>
+        <div style="background:var(--surface,#fff);border:1px solid var(--border,#e5e7eb);border-radius:11px;padding:16px 18px">
+          <div style="font-size:14px;font-weight:600">Phân bổ page theo ngách</div>
+          <div style="font-size:11.5px;color:var(--faint,#9ca3af);margin-top:2px">Click 1 phần để lọc dashboard</div>
+          <div style="height:200px;margin-top:8px;position:relative"><canvas ref="{{ doughnutRef }}"></canvas></div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:12px">
+            <sc-for list="{{ niches }}" as="n" hint-placeholder-count="5">
+              <button onClick="{{ n.onFilter }}" style="display:flex;align-items:center;gap:7px;border:none;background:transparent;cursor:pointer;font-size:12px;color:var(--text,#14171a);padding:0">
+                <span style="width:10px;height:10px;border-radius:3px;background:{{ n.color }}"></span>{{ n.name }}<span style="color:var(--faint,#9ca3af)">{{ n.pagesLabel }}</span>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top content + trends -->
+      <div style="display:grid;grid-template-columns:1.7fr 1fr;gap:14px;margin-top:14px">
+        <div style="background:var(--surface,#fff);border:1px solid var(--border,#e5e7eb);border-radius:11px;overflow:hidden">
+          <div style="padding:15px 18px 12px;font-size:14px;font-weight:600">Top video / post — 28 ngày</div>
+          <div class="crm-scroll" style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:720px">
+            <thead><tr style="background:var(--surface-2,#fbfcfd)">
+              <th style="text-align:left;padding:9px 14px;font-weight:600;color:var(--muted,#6b7280);border-bottom:1px solid var(--border,#e5e7eb);position:sticky;top:0">Bài đăng</th>
+              <th onClick="{{ topSort.likes.onClick }}" style="text-align:right;padding:9px 10px;font-weight:600;color:var(--muted,#6b7280);border-bottom:1px solid var(--border,#e5e7eb);cursor:pointer;white-space:nowrap">Likes {{ topSort.likes.ind }}</th>
+              <th onClick="{{ topSort.comments.onClick }}" style="text-align:right;padding:9px 10px;font-weight:600;color:var(--muted,#6b7280);border-bottom:1px solid var(--border,#e5e7eb);cursor:pointer;white-space:nowrap">Bình luận {{ topSort.comments.ind }}</th>
+              <th onClick="{{ topSort.rcs.onClick }}" style="text-align:right;padding:9px 10px;font-weight:600;color:var(--muted,#6b7280);border-bottom:1px solid var(--border,#e5e7eb);cursor:pointer;white-space:nowrap">R/C/S {{ topSort.rcs.ind }}</th>
+              <th onClick="{{ topSort.rate.onClick }}" style="text-align:right;padding:9px 10px;font-weight:600;color:var(--muted,#6b7280);border-bottom:1px solid var(--border,#e5e7eb);cursor:pointer;white-space:nowrap">Tương tác {{ topSort.rate.ind }}</th>
+              <th onClick="{{ topSort.neg.onClick }}" style="text-align:right;padding:9px 14px;font-weight:600;color:var(--muted,#6b7280);border-bottom:1px solid var(--border,#e5e7eb);cursor:pointer;white-space:nowrap">Neg. sentiment {{ topSort.neg.ind }}</th>
+            </tr></thead>
+            <tbody>
+              <sc-for list="{{ topPostsSorted }}" as="p" hint-placeholder-count="8">
+                <tr data-row style="border-bottom:1px solid var(--border,#e5e7eb);transition:background .1s">
+                  <td style="padding:9px 14px">
+                    <div style="display:flex;gap:10px;align-items:center">
+                      <div style="width:44px;height:44px;flex:none;border-radius:6px;background:{{ p.thumbBg }};position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;letter-spacing:.5px;opacity:.95"><span style="opacity:.7">▶ video</span></div>
+                      <div style="min-width:0">
+                        <div style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px">{{ p.caption }}</div>
+                        <div style="display:flex;align-items:center;gap:7px;margin-top:3px;font-size:11px;color:var(--muted,#6b7280)"><span>{{ p.page }}</span><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:{{ p.nicheColor }}"></span>{{ p.nicheName }}</span><span>· {{ p.time }}</span></div>
+                      </div>
+                    </div>
+                  </td>
+                  <td style="text-align:right;padding:9px 10px;font-variant-numeric:tabular-nums">{{ p.likes }}</td>
+                  <td style="text-align:right;padding:9px 10px;font-variant-numeric:tabular-nums">{{ p.comments }}</td>
+                  <td style="text-align:right;padding:9px 10px;font-variant-numeric:tabular-nums">{{ p.rcs }}</td>
+                  <td style="text-align:right;padding:9px 10px;font-variant-numeric:tabular-nums;font-weight:600">{{ p.rate }}</td>
+                  <td style="text-align:right;padding:9px 14px"><span style="{{ p.negStyle }}">{{ p.neg }}</span></td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+          </div>
+        </div>
+
+        <div style="background:var(--surface,#fff);border:1px solid var(--border,#e5e7eb);border-radius:11px;padding:16px 18px">
+          <div style="font-size:14px;font-weight:600">Xu hướng đang lên</div>
+          <div style="font-size:11.5px;color:var(--faint,#9ca3af);margin-top:2px">Từ khóa / sản phẩm có tương tác tăng đột biến</div>
+          <div style="display:flex;flex-direction:column;gap:2px;margin-top:12px">
+            <sc-for list="{{ trends }}" as="t" hint-placeholder-count="5">
+              <div style="display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid var(--border,#e5e7eb)">
+                <div style="flex:1;min-width:0"><div style="font-weight:500">{{ t.term }}</div><div style="font-size:11px;color:var(--muted,#6b7280);margin-top:2px">{{ t.posts }} bài · <span style="color:{{ t.nicheColor }}">{{ t.nicheName }}</span></div></div>
+                <div style="text-align:right"><div style="font-weight:600;color:var(--good,#16a34a);font-variant-numeric:tabular-nums">{{ t.rate }}</div><div style="font-size:10.5px;color:var(--faint,#9ca3af)">tương tác</div></div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ===== CATALOG ===== -->
+    <sc-if value="{{ isCatalog }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:22px 26px 40px;animation:crmPop .18s ease">
+      <!-- Niche cards -->
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px"><div style="font-size:14px;font-weight:600">Tổng hợp ngách</div><div style="font-size:11.5px;color:var(--faint,#9ca3af)">Số liệu ngành 28 ngày</div></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:12px">
+        <sc-for list="{{ niches }}" as="n" hint-placeholder-count="5">
+          <div style="background:var(--surface,#fff);border:1px solid var(--border,#e5e7eb);border-radius:11px;padding:15px;border-top:3px solid {{ n.color }}">
+            <div style="display:flex;align-items:center;gap:9px">
+              <div style="width:30px;height:30px;border-radius:8px;background:{{ n.tint }};color:{{ n.color }};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px">{{ n.icon }}</div>
+              <div style="font-weight:600;font-size:13.5px">{{ n.name }}</div>
+            </div>
+            <div style="display:flex;gap:6px;margin-top:14px">
+              <div style="flex:1"><div style="font-size:11px;color:var(--muted,#6b7280)">Page</div><div style="font-weight:700;font-size:16px;font-variant-numeric:tabular-nums">{{ n.pages }}</div></div>
+              <div style="flex:1"><div style="font-size:11px;color:var(--muted,#6b7280)">Views/ngày</div><div style="font-weight:700;font-size:16px;font-variant-numeric:tabular-nums">{{ n.viewsShort }}</div></div>
+            </div>
+            <div style="margin-top:8px;font-size:11.5px;color:var(--muted,#6b7280)">Tương tác TB <b style="color:var(--text,#14171a)">{{ n.rateLabel }}</b></div>
+          </div>
+        </sc-for>
+        <button onClick="{{ openNewNiche }}" style="border:1px dashed var(--border-strong,#d1d5db);border-radius:11px;background:transparent;color:var(--accent,#2563eb);cursor:pointer;font-size:13.5px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;min-height:118px">+ Tạo ngách mới</button>
+      </div>
+
+      <!-- Comparison bar -->
+      <div style="background:var(--surface,#fff);border:1px solid var(--border,#e5e7eb);border-radius:11px;padding:16px 18px;margin-top:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:14px;font-weight:600">So sánh ngách</div>
+          <div style="display:flex;border:1px solid var(--border,#e5e7eb);border-radius:8px;overflow:hidden">
+            <sc-for list="{{ barMetrics }}" as="m" hint-placeholder-count="3"><button onClick="{{ m.onClick }}" style="{{ m.style }}">{{ m.label }}</button></sc-for>
+          </div>
+        </div>
+        <div style="height:220px;margin-top:14px;position:relative"><canvas ref="{{ barRef }}"></canvas></div>
+      </div>
+
+      <!-- Tree table -->
+      <div style="background:var(--surface,#fff);border:1px solid var(--border,#e5e7eb);border-radius:11px;margin-top:16px;overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:15px 18px 12px"><div style="font-size:14px;font-weight:600">Phân cấp nhóm page</div><div style="font-size:11.5px;color:var(--faint,#9ca3af)">Nhóm 25 page → sub-group → page · kéo-thả page để chuyển sub-group</div></div>
+        <!-- header -->
+        <div style="display:grid;grid-template-columns:34px minmax(240px,2fr) 150px 90px 110px 130px 130px;gap:0;padding:8px 18px;background:var(--surface-2,#fbfcfd);border-top:1px solid var(--border,#e5e7eb);border-bottom:1px solid var(--border,#e5e7eb);font-size:11.5px;font-weight:600;color:var(--muted,#6b7280)">
+          <div></div><div>Tên</div><div>Ngách</div><div style="text-align:right">Page</div><div style="text-align:right">Views/ngày</div><div style="text-align:right">Tương tác</div><div style="text-align:right">Trạng thái</div>
+        </div>
+        <div>
+          <sc-for list="{{ tree }}" as="g" hint-placeholder-count="3">
+            <div>
+              <!-- group row -->
+              <div style="display:grid;grid-template-columns:34px minmax(240px,2fr) 150px 90px 110px 130px 130px;align-items:center;padding:11px 18px;border-bottom:1px solid var(--border,#e5e7eb);background:var(--surface-2,#fbfcfd);cursor:pointer" onClick="{{ g.onToggle }}">
+                <div><input type="checkbox" checked="{{ g.checked }}" onClick="{{ g.onCheck }}" style="width:15px;height:15px;accent-color:var(--accent,#2563eb);cursor:pointer"></div>
+                <div style="display:flex;align-items:center;gap:9px;font-weight:600"><span style="{{ g.caret }}">▸</span>{{ g.name }}<span style="font-size:11px;font-weight:500;color:var(--faint,#9ca3af)">25 page</span></div>
+                <div style="font-size:12px;color:var(--muted,#6b7280)">{{ g.nicheMix }}</div>
+                <div style="text-align:right;font-variant-numeric:tabular-nums">{{ g.count }}</div>
+                <div style="text-align:right;font-variant-numeric:tabular-nums">{{ g.viewsShort }}</div>
+                <div style="text-align:right;font-variant-numeric:tabular-nums">{{ g.rateLabel }}</div>
+                <div style="text-align:right"><span style="{{ g.statusStyle }}">{{ g.statusLabel }}</span></div>
+              </div>
+              <!-- subgroups -->
+              <sc-if value="{{ g.isOpen }}" hint-placeholder-val="{{ false }}">
+                <sc-for list="{{ g.subs }}" as="s" hint-placeholder-count="2">
+                  <div>
+                    <div onDragOver="{{ allowDrop }}" onDrop="{{ s.onDrop }}" style="display:grid;grid-template-columns:34px minmax(240px,2fr) 150px 90px 110px 130px 130px;align-items:center;padding:10px 18px;border-bottom:1px solid var(--border,#e5e7eb);cursor:pointer;background:{{ s.dropBg }}" onClick="{{ s.onToggle }}">
+                      <div></div>
+                      <div style="display:flex;align-items:center;gap:9px;padding-left:22px;font-weight:500"><span style="{{ s.caret }}">▸</span>{{ s.name }}<span style="font-size:11px;font-weight:400;color:var(--faint,#9ca3af)">{{ s.count }} page</span></div>
+                      <div></div>
+                      <div style="text-align:right;font-variant-numeric:tabular-nums;color:var(--muted,#6b7280)">{{ s.count }}</div>
+                      <div style="text-align:right;font-variant-numeric:tabular-nums;color:var(--muted,#6b7280)">{{ s.viewsShort }}</div>
+                      <div></div>
+                      <div></div>
+                    </div>
+                    <sc-if value="{{ s.isOpen }}" hint-placeholder-val="{{ true }}">
+                      <sc-for list="{{ s.pages }}" as="p" hint-placeholder-count="4">
+                        <div draggable="true" onDragStart="{{ p.onDragStart }}" onDragEnd="{{ p.onDragEnd }}" onClick="{{ p.onOpen }}" data-row style="display:grid;grid-template-columns:34px minmax(240px,2fr) 150px 90px 110px 130px 130px;align-items:center;padding:9px 18px;border-bottom:1px solid var(--border,#e5e7eb);cursor:grab;opacity:{{ p.dragOpacity }}">
+                          <div><input type="checkbox" checked="{{ p.checked }}" onClick="{{ p.onCheck }}" style="width:15px;height:15px;accent-color:var(--accent,#2563eb);cursor:pointer"></div>
+                          <div style="display:flex;align-items:center;gap:9px;padding-left:44px;min-width:0"><span style="color:var(--faint,#9ca3af);font-size:12px">⋮⋮</span><div style="width:24px;height:24px;flex:none;border-radius:6px;background:{{ p.avatarBg }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600">{{ p.initials }}</div><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.name }}</span></div>
+                          <div><span style="display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:20px;background:{{ p.nicheTint }};color:{{ p.nicheColor }};font-size:11px;font-weight:500"><span style="width:7px;height:7px;border-radius:2px;background:{{ p.nicheColor }}"></span>{{ p.nicheName }}</span></div>
+                          <div style="text-align:right;color:var(--faint,#9ca3af)">—</div>
+                          <div style="text-align:right;font-variant-numeric:tabular-nums">{{ p.viewsShort }}</div>
+                          <div style="text-align:right;font-variant-numeric:tabular-nums">{{ p.rateLabel }}</div>
+                          <div style="text-align:right"><span style="{{ p.statusStyle }}">{{ p.statusLabel }}</span></div>
+                        </div>
+                      </sc-for>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ===== PAGE DETAIL ===== -->
+    <sc-if value="{{ isPage }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:22px 26px 40px;animation:crmPop .18s ease">
+      <button onClick="{{ backToCatalog }}" style="border:none;background:transparent;color:var(--muted,#6b7280);cursor:pointer;font-size:12.5px;padding:0 0 14px;display:flex;align-items:center;gap:6px">← Quay lại danh mục</button>
+      <div style="background:var(--surface,#fff);border:1px solid var(--border,#e5e7eb);border-radius:11px;padding:18px 20px;display:flex;align-items:center;gap:16px">
+        <div style="width:56px;height:56px;flex:none;border-radius:12px;background:{{ pd.avatarBg }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700">{{ pd.initials }}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:18px;font-weight:700">{{ pd.name }}</div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:5px;font-size:12.5px;color:var(--muted,#6b7280)"><span style="display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:20px;background:{{ pd.nicheTint }};color:{{ pd.nicheColor }};font-weight:500"><span style="width:8px;height:8px;border-radius:2px;background:{{ pd.nicheColor }}"></span>{{ pd.nicheName }}</span><span>{{ pd.followerLabel }} follower · thuộc {{ pd.groupName }}</span></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:12px;color:var(--muted,#6b7280)">Đổi ngách:</span>
+          <select value="{{ pd.nicheId }}" onChange="{{ pd.onChangeNiche }}" style="height:34px;padding:0 26px 0 10px;border:1px solid var(--border-strong,#d1d5db);border-radius:8px;background:var(--surface,#fff);color:var(--text,#14171a);font-size:12.5px;cursor:pointer">
+            <sc-for list="{{ niches }}" as="n" hint-placeholder-count="5"><option value="{{ n.id }}">{{ n.name }}</option></sc-for>
+          </select>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:14px">
+        <sc-for list="{{ pd.kpis }}" as="k" hint-placeholder-count="8">
+          <div style="background:var(--surface,#fff);border:1px solid var(--border,#e5e7eb);border-radius:11px;padding:13px 15px"><div style="font-size:11.5px;color:var(--muted,#6b7280)">{{ k.label }}</div><div style="font-size:20px;font-weight:700;margin-top:5px;font-variant-numeric:tabular-nums">{{ k.value }}</div></div>
+        </sc-for>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1.7fr 1fr;gap:14px;margin-top:14px;align-items:start">
+        <div style="background:var(--surface,#fff);border:1px solid var(--border,#e5e7eb);border-radius:11px;overflow:hidden">
+          <div style="padding:15px 18px 12px;font-size:14px;font-weight:600">Top post của page</div>
+          <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+            <thead><tr style="background:var(--surface-2,#fbfcfd)"><th style="text-align:left;padding:9px 16px;font-weight:600;color:var(--muted,#6b7280);border-bottom:1px solid var(--border,#e5e7eb)">Bài đăng</th><th style="text-align:right;padding:9px 12px;font-weight:600;color:var(--muted,#6b7280);border-bottom:1px solid var(--border,#e5e7eb)">Tương tác</th><th style="text-align:right;padding:9px 12px;font-weight:600;color:var(--muted,#6b7280);border-bottom:1px solid var(--border,#e5e7eb)">Reach</th><th style="text-align:right;padding:9px 16px;font-weight:600;color:var(--muted,#6b7280);border-bottom:1px solid var(--border,#e5e7eb)">Neg.</th></tr></thead>
+            <tbody>
+              <sc-for list="{{ pd.posts }}" as="p" hint-placeholder-count="5">
+                <tr data-row style="border-bottom:1px solid var(--border,#e5e7eb)"><td style="padding:10px 16px"><div style="display:flex;gap:10px;align-items:center"><div style="width:38px;height:38px;flex:none;border-radius:6px;background:{{ p.thumbBg }}"></div><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px">{{ p.caption }}<div style="font-size:11px;color:var(--faint,#9ca3af);margin-top:2px">{{ p.time }}</div></div></div></td><td style="text-align:right;padding:10px 12px;font-weight:600;font-variant-numeric:tabular-nums">{{ p.rate }}</td><td style="text-align:right;padding:10px 12px;font-variant-numeric:tabular-nums">{{ p.reach }}</td><td style="text-align:right;padding:10px 16px"><span style="{{ p.negStyle }}">{{ p.neg }}</span></td></tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+        <div style="background:var(--surface,#fff);border:1px solid var(--border,#e5e7eb);border-radius:11px;padding:16px 18px">
+          <div style="font-size:14px;font-weight:600">Gợi ý ngách</div>
+          <div style="margin-top:12px;padding:14px;border-radius:9px;background:{{ pd.sugTint }};border:1px solid {{ pd.sugBorder }}">
+            <div style="font-size:12.5px;color:var(--muted,#6b7280)">{{ pd.sugHead }}</div>
+            <div style="font-size:15px;font-weight:700;margin-top:6px;color:{{ pd.sugColor }}">{{ pd.sugNiche }}</div>
+            <div style="font-size:12px;color:var(--muted,#6b7280);margin-top:8px;line-height:1.55">{{ pd.sugText }}</div>
+          </div>
+          <div style="margin-top:14px;font-size:12px;color:var(--muted,#6b7280);line-height:1.6">
+            <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border,#e5e7eb)"><span>PPI của page</span><b style="color:var(--text,#14171a)">{{ pd.ppiLabel }}</b></div>
+            <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border,#e5e7eb)"><span>PPI TB ngách hiện tại</span><b style="color:var(--text,#14171a)">{{ pd.nicheAvgPpi }}</b></div>
+            <div style="display:flex;justify-content:space-between;padding:6px 0"><span>Chênh lệch</span><b style="color:{{ pd.diffColor }}">{{ pd.diffLabel }}</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+  </main>
+</div>
+</sc-if>
+
+<!-- ===== MODAL: create / edit niche ===== -->
+<sc-if value="{{ modalOpen }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeModal }}" style="position:fixed;inset:0;z-index:60;background:rgba(15,18,25,.45);display:flex;align-items:center;justify-content:center;padding:24px">
+  <div onClick="{{ stop }}" style="width:520px;max-height:88vh;display:flex;flex-direction:column;background:var(--surface,#fff);border:1px solid var(--border,#e5e7eb);border-radius:14px;overflow:hidden;box-shadow:0 24px 60px rgba(15,18,25,.28);animation:crmPop .16s ease">
+    <div style="padding:18px 20px;border-bottom:1px solid var(--border,#e5e7eb);display:flex;align-items:center;justify-content:between;justify-content:space-between"><div style="font-size:15px;font-weight:600">{{ modalTitle }}</div><button onClick="{{ closeModal }}" style="border:none;background:transparent;color:var(--muted,#6b7280);cursor:pointer;font-size:20px;line-height:1">×</button></div>
+    <div class="crm-scroll" style="padding:18px 20px;overflow:auto;display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;gap:14px;align-items:flex-end">
+        <div style="flex:1;display:flex;flex-direction:column;gap:6px"><label style="font-size:12.5px;font-weight:500;color:var(--muted,#6b7280)">Tên ngách</label><input value="{{ modalName }}" onInput="{{ onModalName }}" placeholder="VD: Review sản phẩm" style="height:38px;padding:0 12px;border:1px solid var(--border-strong,#d1d5db);border-radius:8px;background:var(--surface,#fff);color:var(--text,#14171a);font-size:14px"></div>
+        <div style="width:44px;height:38px;border-radius:8px;background:{{ modalTint }};color:{{ modalColor }};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px">{{ modalIcon }}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px"><label style="font-size:12.5px;font-weight:500;color:var(--muted,#6b7280)">Màu</label><div style="display:flex;gap:10px">
+        <sc-for list="{{ modalSwatches }}" as="c" hint-placeholder-count="6"><button onClick="{{ c.onClick }}" style="{{ c.style }}"></button></sc-for>
+      </div></div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <label style="font-size:12.5px;font-weight:500;color:var(--muted,#6b7280)">Gán vào page ({{ modalSelectedCount }} đã chọn)</label>
+        <input value="{{ modalSearch }}" onInput="{{ onModalSearch }}" placeholder="Tìm page…" style="height:34px;padding:0 12px;border:1px solid var(--border-strong,#d1d5db);border-radius:8px;background:var(--surface,#fff);color:var(--text,#14171a);font-size:13px">
+        <div class="crm-scroll" style="max-height:210px;overflow:auto;border:1px solid var(--border,#e5e7eb);border-radius:8px">
+          <sc-for list="{{ modalPages }}" as="p" hint-placeholder-count="8">
+            <label style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border,#e5e7eb);cursor:pointer;font-size:13px"><input type="checkbox" checked="{{ p.checked }}" onChange="{{ p.onToggle }}" style="width:15px;height:15px;accent-color:var(--accent,#2563eb)"><div style="width:22px;height:22px;border-radius:5px;background:{{ p.avatarBg }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600">{{ p.initials }}</div>{{ p.name }}<span style="margin-left:auto;font-size:11px;color:var(--faint,#9ca3af)">{{ p.nicheName }}</span></label>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+    <div style="padding:14px 20px;border-top:1px solid var(--border,#e5e7eb);display:flex;justify-content:flex-end;gap:10px">
+      <button onClick="{{ closeModal }}" style="height:38px;padding:0 16px;border:1px solid var(--border-strong,#d1d5db);border-radius:8px;background:transparent;color:var(--text,#14171a);cursor:pointer;font-size:13.5px;font-weight:500">Hủy</button>
+      <button onClick="{{ saveNiche }}" style="height:38px;padding:0 18px;border:none;border-radius:8px;background:var(--accent,#2563eb);color:#fff;cursor:pointer;font-size:13.5px;font-weight:600">Lưu ngách</button>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<!-- ===== BULK BAR ===== -->
+<sc-if value="{{ bulkOpen }}" hint-placeholder-val="{{ false }}">
+<div style="position:fixed;left:50%;transform:translateX(-50%);bottom:22px;z-index:50;display:flex;align-items:center;gap:14px;background:var(--text,#14171a);color:var(--bg,#fff);border-radius:12px;padding:10px 12px 10px 18px;box-shadow:0 12px 34px rgba(15,18,25,.32);animation:crmPop .16s ease">
+  <span style="font-size:13px;font-weight:600">{{ bulkCount }} page đã chọn</span>
+  <span style="font-size:12px;opacity:.7">Gán ngách:</span>
+  <div style="display:flex;gap:7px">
+    <sc-for list="{{ bulkNiches }}" as="n" hint-placeholder-count="5"><button onClick="{{ n.onAssign }}" style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid rgba(255,255,255,.2);border-radius:7px;background:transparent;color:inherit;cursor:pointer;font-size:12px"><span style="width:8px;height:8px;border-radius:2px;background:{{ n.color }}"></span>{{ n.name }}</button></sc-for>
+  </div>
+  <button onClick="{{ clearSelection }}" style="border:none;background:transparent;color:inherit;cursor:pointer;font-size:12px;opacity:.75;padding:6px 8px">Bỏ chọn</button>
+</div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:760},&quot;defaultTheme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Giao diện&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:[&quot;#2563eb&quot;,&quot;#7c3aed&quot;,&quot;#0891b2&quot;,&quot;#16a34a&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Giao diện&quot;},&quot;negThreshold&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:5,&quot;min&quot;:1,&quot;max&quot;:15,&quot;step&quot;:0.5,&quot;unit&quot;:&quot;%&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Cảnh báo&quot;}}">
+class Component extends DCLogic {
+  accentColor(){ const a=this.props.accent; return Array.isArray(a)?a[0]:(a||(this.state&&this.state.theme==='dark'?'#3b82f6':'#2563eb')); }
+  constructor(props){
+    super(props);
+    const accent = Array.isArray(props.accent)?props.accent[0]:(props.accent||'#2563eb');
+    const niches = [
+      {id:'win',   name:'Content Win',    color:'#2563eb', icon:'W', pages:180, views:6200000, reach:3300000, rate:4.8, ppi:82},
+      {id:'trend', name:'Sản phẩm Trend', color:'#7c3aed', icon:'T', pages:120, views:4100000, reach:2200000, rate:5.6, ppi:78},
+      {id:'hot',   name:'Hotdeals',       color:'#ea580c', icon:'H', pages:90,  views:3900000, reach:2000000, rate:3.9, ppi:71},
+      {id:'coupon',name:'Coupon',         color:'#16a34a', icon:'C', pages:70,  views:2400000, reach:1300000, rate:4.4, ppi:74},
+      {id:'epc',   name:'EPC',            color:'#d97706', icon:'E', pages:40,  views:1800000, reach:900000,  rate:6.1, ppi:69},
+    ];
+    const data = this.genData(niches);
+    this.state = {
+      theme: props.defaultTheme === 'dark' ? 'dark' : 'light',
+      screen: 'login',
+      nicheFilter: null,
+      groupFilter: 'all',
+      expanded: { [data.groups[0].id]: true },
+      subExpanded: { [data.subs[0].id]: true },
+      selected: {},
+      selectedPageId: null,
+      modal: null,
+      modalSearch: '',
+      barMetric: 'views',
+      sort: { top: { col:'rate', dir:'desc' } },
+      niches,
+      pages: data.pages,
+      groups: data.groups,
+      subs: data.subs,
+      dragId: null,
+    };
+    this.charts = {};
+    this._nodes = {};
+    this._appliedTheme = null;
+    this.topPosts = this.genTopPosts(niches, data.pages);
+    this.trends = [
+      {term:'#sănsale2609', posts:214, niche:'hot', rate:'+38%'},
+      {term:'máy ép chậm mini', posts:167, niche:'trend', rate:'+31%'},
+      {term:'#reviewthật', posts:301, niche:'win', rate:'+24%'},
+      {term:'mã freeship 0đ', posts:142, niche:'coupon', rate:'+22%'},
+      {term:'ví trả góp 0%', posts:88, niche:'epc', rate:'+19%'},
+    ];
+  }
+
+  // ---------- data ----------
+  genData(niches){
+    let seed=7; const rnd=()=>{seed=(seed*1103515245+12345)&0x7fffffff; return seed/0x7fffffff;};
+    const ri=(a,b)=>Math.floor(a+(b-a+1)*rnd());
+    const pick=a=>a[ri(0,a.length-1)];
+    const groups=[{id:'g1',name:'Nhóm 01'},{id:'g2',name:'Nhóm 02'},{id:'g3',name:'Nhóm 03'}];
+    const subs=[]; const pages=[];
+    const pool={win:['Mẹo Hay Mỗi Ngày','Góc Review Thật','Chuyện Nhà Chuyện Cửa','Sống Khỏe Sống Vui'],trend:['Săn Đồ Trend','Đồ Chơi Công Nghệ','Xu Hướng 2026','Nhà Bếp Thông Minh'],hot:['Deal Sốc Hôm Nay','Kho Sỉ Giá Gốc','Flash Sale 24h','Chợ Giá Rẻ'],coupon:['Mã Giảm Giá Vàng','Voucher Mỗi Ngày','Săn Coupon','Kho Mã Freeship'],epc:['Tài Chính Thông Minh','Đầu Tư Từ 0','Ví Tiền Khỏe','Vay Nhanh 24h']};
+    let n=1;
+    groups.forEach((g,gi)=>{
+      for(let s=0;s<2;s++){
+        const sid=g.id+'-s'+(s+1);
+        subs.push({id:sid,groupId:g.id,name:'Sub-group '+String.fromCharCode(65+s)});
+        const baseNiche=niches[(gi*2+s)%niches.length].id;
+        for(let p=0;p<4;p++){
+          const nid = rnd()<0.72 ? baseNiche : pick(niches).id;
+          const nm = pick(pool[nid])+' '+String(n).padStart(2,'0');
+          pages.push({
+            id:'p'+n, name:nm, groupId:g.id, subId:sid, nicheId:nid,
+            follower:ri(8,240)*1000, posts:ri(40,320),
+            likes:ri(2,60)*1000, comments:ri(200,9000),
+            rate:+(rnd()*5.4+0.8).toFixed(2), ppi:ri(38,96),
+            views:ri(20,180)*1000, reach:ri(8,90)*1000,
+          });
+          n++;
+        }
+      }
+    });
+    return {groups,subs,pages};
+  }
+  genTopPosts(niches, pages){
+    let seed=91; const rnd=()=>{seed=(seed*1103515245+12345)&0x7fffffff; return seed/0x7fffffff;};
+    const ri=(a,b)=>Math.floor(a+(b-a+1)*rnd());
+    const caps=['Mẹo tiết kiệm điện mùa nóng ai cũng nên biết','Top 5 món đồ bếp đáng tiền nhất 2026','Săn deal giày sneaker giảm tới 60%','Cách nhận mã freeship mọi đơn Shopee','Review máy hút bụi mini sau 30 ngày','Bí quyết đầu tư an toàn cho người mới','Unbox đồ chơi công nghệ hot trend','Chốt đơn nồi chiên không dầu giá sốc'];
+    const times=['2 giờ trước','5 giờ trước','1 ngày trước','2 ngày trước','3 ngày trước','4 ngày trước','1 tuần trước','9 ngày trước'];
+    return caps.map((c,i)=>{
+      const pg=pages[ri(0,pages.length-1)];
+      const neg=+(rnd()* (i%3===0?11:4) + 0.4).toFixed(1);
+      return {id:'tp'+i, caption:c, page:pg.name, nicheId:pg.nicheId, time:times[i],
+        likesN:ri(3,90)*1000, commentsN:ri(120,7200), rcsN:ri(4,120)*1000,
+        rateN:+(rnd()*7+1.2).toFixed(2), reachN:ri(20,400)*1000, ipiN:+(rnd()*9+2).toFixed(1), negN:neg};
+    });
+  }
+
+  // ---------- theme ----------
+  themeColors(t){
+    const a=this.props.accent; const accent = Array.isArray(a)?a[0]:(a || (t==='dark' ? '#3b82f6' : '#2563eb'));
+    if(t==='dark') return {
+      '--bg':'#0e1013','--surface':'#16191e','--surface-2':'#1b1f26','--border':'#262b33','--border-strong':'#333a44',
+      '--text':'#e6e8eb','--muted':'#9aa4b2','--faint':'#6b7480','--accent':accent,'--accent-soft':'#16233b',
+      '--good':'#22c55e','--warn':'#f59e0b','--danger':'#f87171','--danger-soft':'#2a1a1c','--row-hover':'#1b2028'};
+    return {
+      '--bg':'#f6f7f9','--surface':'#ffffff','--surface-2':'#fbfcfd','--border':'#e8eaed','--border-strong':'#d1d5db',
+      '--text':'#14171a','--muted':'#6b7280','--faint':'#9ca3af','--accent':accent,'--accent-soft':'#eff4ff',
+      '--good':'#16a34a','--warn':'#d97706','--danger':'#dc2626','--danger-soft':'#fef2f2','--row-hover':'#f7f8fa'};
+  }
+  applyVars(){
+    if(!this._root) return;
+    const c=this.themeColors(this.state.theme);
+    for(const k in c) this._root.style.setProperty(k,c[k]);
+  }
+  componentDidMount(){ this.applyVars(); this.syncCharts(); }
+  componentDidUpdate(){ this.applyVars(); this.syncCharts(); }
+
+  // ---------- charts ----------
+  ck(){ // chart palette from current theme
+    return this.themeColors(this.state.theme);
+  }
+  syncCharts(){
+    if(!window.Chart) { setTimeout(()=>this.forceUpdate(),120); return; }
+    if(this._appliedTheme && this._appliedTheme!==this.state.theme){
+      Object.values(this.charts).forEach(c=>c&&c.destroy()); this.charts={};
+    }
+    this._appliedTheme=this.state.theme;
+    if(this._nodes.line && !this.charts.line) this.buildLine();
+    if(this._nodes.doughnut && !this.charts.doughnut) this.buildDoughnut();
+    if(this._nodes.bar && !this.charts.bar) this.buildBar();
+  }
+  gridColor(){ return this.state.theme==='dark' ? 'rgba(255,255,255,.07)' : 'rgba(15,23,42,.07)'; }
+  tickColor(){ return this.state.theme==='dark' ? '#9aa4b2' : '#6b7280'; }
+  buildLine(){
+    const nf=this.state.nicheFilter;
+    let base=[]; let seed=3; const rnd=()=>{seed=(seed*1103515245+12345)&0x7fffffff; return seed/0x7fffffff;};
+    const total=this.state.niches.reduce((s,n)=>s+n.views,0);
+    const scale = nf ? (this.state.niches.find(n=>n.id===nf).views/total) : 1;
+    const start=15.6e6*scale, end=19.4e6*scale;
+    for(let i=0;i<28;i++){ const t=i/27; base.push(Math.round((start+(end-start)*t + (rnd()-0.5)*0.9e6*scale))); }
+    const labels=base.map((_,i)=> 'N'+(i+1));
+    const accent=this.ck()['--accent'];
+    const ctx=this._nodes.line.getContext('2d');
+    const grad=ctx.createLinearGradient(0,0,0,240);
+    grad.addColorStop(0, accent+'44'); grad.addColorStop(1, accent+'02');
+    this.charts.line=new window.Chart(ctx,{type:'line',data:{labels,datasets:[{data:base,borderColor:accent,backgroundColor:grad,borderWidth:2,fill:true,tension:.35,pointRadius:0,pointHoverRadius:4}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:(c)=>(c.parsed.y/1e6).toFixed(2).replace('.',',')+' triệu views'}}},
+      scales:{x:{grid:{display:false},ticks:{color:this.tickColor(),maxTicksLimit:8,font:{size:10}}},y:{grid:{color:this.gridColor()},ticks:{color:this.tickColor(),font:{size:10},callback:(v)=>(v/1e6).toFixed(0)+'tr'}}}}});
+  }
+  buildDoughnut(){
+    const ns=this.state.niches;
+    this.charts.doughnut=new window.Chart(this._nodes.doughnut.getContext('2d'),{type:'doughnut',
+      data:{labels:ns.map(n=>n.name),datasets:[{data:ns.map(n=>n.pages),backgroundColor:ns.map(n=>n.color),borderColor:this.ck()['--surface'],borderWidth:2,hoverOffset:6}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:'62%',plugins:{legend:{display:false},tooltip:{callbacks:{label:(c)=>c.label+': '+c.parsed+' page'}}},
+      onClick:(e,els)=>{ if(els.length){ const id=ns[els[0].index].id; this.setState(s=>({nicheFilter: s.nicheFilter===id?null:id})); } }}});
+  }
+  buildBar(){
+    const ns=this.state.niches; const m=this.state.barMetric;
+    const val=(n)=> m==='views'? n.views : m==='rate'? n.rate : n.ppi;
+    const label= m==='views'?'Daily Views': m==='rate'?'Post interaction rate (%)':'Page Performance Index (%)';
+    this.charts.bar=new window.Chart(this._nodes.bar.getContext('2d'),{type:'bar',
+      data:{labels:ns.map(n=>n.name),datasets:[{label,data:ns.map(val),backgroundColor:ns.map(n=>n.color),borderRadius:5,barThickness:20}]},
+      options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:(c)=> m==='views'? (c.parsed.x/1e6).toFixed(2).replace('.',',')+' tr views' : c.parsed.x.toString().replace('.',',')+'%'}}},
+      scales:{x:{grid:{color:this.gridColor()},ticks:{color:this.tickColor(),font:{size:10},callback:(v)=> m==='views'?(v/1e6).toFixed(0)+'tr':v}},y:{grid:{display:false},ticks:{color:this.tickColor(),font:{size:11}}}}}});
+  }
+
+  // ---------- format ----------
+  vShort(n){ return n>=1e6 ? (n/1e6).toFixed(1).replace('.',',')+' tr' : n>=1e3 ? Math.round(n/1e3)+'K' : String(n); }
+  int(n){ return n.toLocaleString('vi-VN'); }
+  pct(n){ return String(n).replace('.',',')+'%'; }
+  tint(hex){ return hex+'1c'; }
+  statusOf(ppi){
+    if(ppi>=80) return {label:'Hiệu quả', color:'var(--good,#16a34a)', soft:'rgba(22,163,74,.13)'};
+    if(ppi>=60) return {label:'Trung bình', color:'var(--warn,#d97706)', soft:'rgba(217,119,6,.14)'};
+    return {label:'Cần review', color:'var(--danger,#dc2626)', soft:'rgba(220,38,38,.13)'};
+  }
+  statusStyle(ppi){ const s=this.statusOf(ppi); return 'display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;color:'+s.color+';background:'+s.soft; }
+  negStyle(v,strong){ const th=this.props.negThreshold ?? 5; const bad=v>th; return 'display:inline-block;padding:'+(strong?'2px 8px':'2px 7px')+';border-radius:6px;font-variant-numeric:tabular-nums;font-weight:'+(bad?'700':'500')+';color:'+(bad?'var(--danger,#dc2626)':'var(--muted,#6b7280)')+';background:'+(bad?'var(--danger-soft,#fef2f2)':'transparent'); }
+  nicheById(id){ return this.state.niches.find(n=>n.id===id) || this.state.niches[0]; }
+  avatarBg(str){ let h=0; for(let i=0;i<str.length;i++) h=(h*31+str.charCodeAt(i))%360; return 'hsl('+h+' 52% 52%)'; }
+  initials(str){ const w=str.split(' ').filter(Boolean); return ((w[0]?.[0]||'')+(w[1]?.[0]||'')).toUpperCase(); }
+
+  // ---------- filtered pages ----------
+  visiblePages(){
+    const {pages,nicheFilter,groupFilter}=this.state;
+    return pages.filter(p=> (nicheFilter?p.nicheId===nicheFilter:true) && (groupFilter==='all'?true:p.groupId===groupFilter));
+  }
+
+  // ---------- render ----------
+  renderVals(){
+    const S=this.state; const self=this;
+    const go=(screen)=>this.setState({screen});
+    const rootRef=(n)=>{ if(n){ this._root=n; this.applyVars(); } };
+    const mkChartRef=(key)=>(n)=>{ if(n){ this._nodes[key]=n; } else { this._nodes[key]=null; if(this.charts[key]){ this.charts[key].destroy(); this.charts[key]=null; } } };
+
+    // ---- nav
+    const navDef=[['dashboard','Dashboard','▦'],['catalog','Danh mục ngách & nhóm','▤']];
+    const navItems=navDef.map(([id,label,glyph])=>{
+      const active=S.screen===id || (id==='catalog'&&S.screen==='page');
+      return {label,glyph,onClick:()=>go(id),
+        style:'display:flex;align-items:center;gap:11px;padding:9px 12px;border:none;border-radius:8px;cursor:pointer;font-size:13.5px;text-align:left;font-weight:'+(active?'600':'500')+';color:'+(active?'var(--accent,#2563eb)':'var(--text,#14171a)')+';background:'+(active?'var(--accent-soft,#eff4ff)':'transparent')};
+    });
+
+    // ---- niches (with baked handlers + labels)
+    const niches=S.niches.map(n=>({...n, tint:this.tint(n.color), viewsShort:this.vShort(n.views),
+      rateLabel:this.pct(n.rate), pagesLabel:n.pages+' page', onFilter:()=>this.setState(s=>({nicheFilter:s.nicheFilter===n.id?null:n.id}))}));
+
+    // ---- kpis (respond to niche filter)
+    const nf=S.nicheFilter; const active=nf?this.nicheById(nf):null;
+    const totals={pages:S.niches.reduce((s,n)=>s+n.pages,0), views:S.niches.reduce((s,n)=>s+n.views,0), reach:S.niches.reduce((s,n)=>s+n.reach,0)};
+    const wRate=S.niches.reduce((s,n)=>s+n.rate*n.pages,0)/totals.pages;
+    const kpis = nf ? [
+      {label:'Page trong ngách', value:this.int(active.pages), sub:active.name+' · đang active'},
+      {label:'Tổng Daily Views', value:this.vShort(active.views), sub:'/ngày · cộng dồn ngách'},
+      {label:'Tổng Reach/ngày', value:this.vShort(active.reach), sub:'/ngày'},
+      {label:'Interaction rate TB', value:this.pct(active.rate), sub:'trung bình ngách'},
+    ] : [
+      {label:'Page đang active', value:'487', sub:'/ 500 page · 13 tạm dừng'},
+      {label:'Tổng Daily Views', value:this.vShort(totals.views), sub:'/ngày · toàn hệ thống'},
+      {label:'Tổng Reach/ngày', value:this.vShort(totals.reach), sub:'/ngày · cộng dồn'},
+      {label:'Interaction rate TB', value:this.pct(+wRate.toFixed(1)), sub:'trung bình có trọng số'},
+    ];
+
+    // ---- top posts sorted
+    const so=S.sort.top; const colMap={likes:'likesN',comments:'commentsN',rcs:'rcsN',rate:'rateN',neg:'negN'};
+    let tp=[...this.topPosts];
+    if(nf) tp=tp.filter(p=>p.nicheId===nf);
+    if(so){ const key=colMap[so.col]; tp.sort((a,b)=> so.dir==='desc'? b[key]-a[key] : a[key]-b[key]); }
+    const topPostsSorted=tp.map(p=>{ const nc=this.nicheById(p.nicheId); return {caption:p.caption,page:p.page,time:p.time,
+      nicheName:nc.name,nicheColor:nc.color,thumbBg:this.avatarBg(p.caption),
+      likes:this.int(p.likesN),comments:this.int(p.commentsN),rcs:this.int(p.rcsN),rate:this.pct(p.rateN),
+      neg:this.pct(p.negN),negStyle:this.negStyle(p.negN,true)};});
+    const topSort={}; ['likes','comments','rcs','rate','neg'].forEach(c=>{ topSort[c]={onClick:()=>this.toggleSort('top',c), ind: (so&&so.col===c)?(so.dir==='desc'?'↓':'↑'):''}; });
+
+    // ---- trends
+    const trends=this.trends.map(t=>{ const nc=this.nicheById(t.niche); return {term:t.term,posts:t.posts,rate:t.rate,nicheName:nc.name,nicheColor:nc.color}; });
+
+    // ---- bar metric toggle
+    const barMetrics=[['views','Daily Views'],['rate','Tương tác'],['ppi','PPI']].map(([id,label])=>({label,
+      onClick:()=>{ if(this.charts.bar){this.charts.bar.destroy();this.charts.bar=null;} this.setState({barMetric:id}); },
+      style:'padding:6px 12px;border:none;cursor:pointer;font-size:12px;font-weight:'+(S.barMetric===id?'600':'500')+';background:'+(S.barMetric===id?'var(--accent,#2563eb)':'transparent')+';color:'+(S.barMetric===id?'#fff':'var(--muted,#6b7280)')}));
+
+    // ---- tree
+    const vis=this.visiblePages();
+    const inScope=(gid)=> S.groupFilter==='all'||S.groupFilter===gid;
+    const tree=S.groups.filter(g=>inScope(g.id)).map(g=>{
+      const gpages=vis.filter(p=>p.groupId===g.id);
+      const gviews=gpages.reduce((s,p)=>s+p.views,0);
+      const grate=gpages.length? gpages.reduce((s,p)=>s+p.rate,0)/gpages.length:0;
+      const gppi=gpages.length? gpages.reduce((s,p)=>s+p.ppi,0)/gpages.length:0;
+      const st=this.statusOf(gppi);
+      const mix=[...new Set(gpages.map(p=>p.nicheId))].map(id=>this.nicheById(id).name).slice(0,2).join(', ')+([...new Set(gpages.map(p=>p.nicheId))].length>2?'…':'');
+      const isOpen=!!S.expanded[g.id];
+      const subs=S.subs.filter(s=>s.groupId===g.id).map(s=>{
+        const spages=gpages.filter(p=>p.subId===s.id);
+        const sviews=spages.reduce((sum,p)=>sum+p.views,0);
+        const sOpen=!!S.subExpanded[s.id];
+        const pages=spages.map(p=>{ const nc=this.nicheById(p.nicheId); const ps=this.statusOf(p.ppi);
+          return {name:p.name,initials:this.initials(p.name),avatarBg:this.avatarBg(p.name),
+            nicheName:nc.name,nicheColor:nc.color,nicheTint:this.tint(nc.color),
+            viewsShort:this.vShort(p.views),rateLabel:this.pct(p.rate),
+            statusLabel:ps.label,statusStyle:this.statusStyle(p.ppi),
+            checked:!!S.selected[p.id], dragOpacity:S.dragId===p.id?'0.4':'1',
+            onOpen:()=>this.setState({screen:'page',selectedPageId:p.id}),
+            onCheck:(e)=>{ e.stopPropagation(); this.toggleSelect(p.id); },
+            onDragStart:(e)=>{ this.setState({dragId:p.id}); },
+            onDragEnd:()=>this.setState({dragId:null}) };
+        });
+        return {name:s.name,count:spages.length,viewsShort:this.vShort(sviews),isOpen:sOpen,
+          caret:'display:inline-block;transition:transform .15s;transform:rotate('+(sOpen?'90deg':'0')+');color:var(--faint,#9ca3af);font-size:11px',
+          dropBg: S.dragId? 'var(--accent-soft,#eff4ff)':'transparent',
+          onToggle:()=>this.setState(st2=>({subExpanded:{...st2.subExpanded,[s.id]:!st2.subExpanded[s.id]}})),
+          onDrop:(e)=>{ e.preventDefault(); this.movePage(this.state.dragId, s.groupId, s.id); },
+          pages};
+      });
+      const allChecked=gpages.length>0 && gpages.every(p=>S.selected[p.id]);
+      return {name:g.name,count:gpages.length,viewsShort:this.vShort(gviews),rateLabel:this.pct(+grate.toFixed(1)),
+        nicheMix:mix||'—',statusLabel:st.label,statusStyle:this.statusStyle(gppi),isOpen,checked:allChecked,
+        caret:'display:inline-block;transition:transform .15s;transform:rotate('+(isOpen?'90deg':'0')+');color:var(--muted,#6b7280);font-size:12px',
+        onToggle:()=>this.setState(st2=>({expanded:{...st2.expanded,[g.id]:!st2.expanded[g.id]}})),
+        onCheck:(e)=>{ e.stopPropagation(); this.toggleGroupSelect(gpages.map(p=>p.id), !allChecked); },
+        subs};
+    });
+
+    // ---- bulk
+    const selIds=Object.keys(S.selected).filter(k=>S.selected[k]);
+    const bulkNiches=S.niches.map(n=>({name:n.name,color:n.color,onAssign:()=>this.bulkAssign(n.id)}));
+
+    // ---- page detail
+    let pd=null;
+    if(S.screen==='page' && S.selectedPageId){
+      const p=S.pages.find(x=>x.id===S.selectedPageId);
+      if(p){ const nc=this.nicheById(p.nicheId); const g=S.groups.find(x=>x.id===p.groupId);
+        const st=this.statusOf(p.ppi);
+        // suggestion: best niche by page fit vs niche avg
+        const diff=p.ppi-nc.ppi;
+        let sug, sugText, sugColor, sugTint, sugBorder, sugHead;
+        if(diff>=6){ sug=nc.name; sugHead='Giữ nguyên ngách'; sugColor='var(--good,#16a34a)'; sugTint='rgba(22,163,74,.10)'; sugBorder='rgba(22,163,74,.3)'; sugText='PPI của page cao hơn trung bình ngách '+this.pct(Math.abs(diff))+'. Page đang chạy tốt, nên duy trì và nhân bản content.'; }
+        else if(diff<=-6){ // recommend a niche whose avg it beats most
+          const better=[...S.niches].filter(x=>x.id!==nc.id).sort((a,b)=>(p.ppi-a.ppi)-(p.ppi-b.ppi) ).reverse()[0];
+          sug=better.name; sugHead='Cân nhắc đổi sang'; sugColor=better.color; sugTint=this.tint(better.color); sugBorder=better.color+'55'; sugText='PPI thấp hơn TB ngách hiện tại '+this.pct(Math.abs(diff))+'. So với ngách "'+better.name+'" (TB '+this.pct(better.ppi)+'), page có khả năng hiệu quả hơn.'; }
+        else { sug=nc.name; sugHead='Ổn định'; sugColor='var(--warn,#d97706)'; sugTint='rgba(217,119,6,.10)'; sugBorder='rgba(217,119,6,.3)'; sugText='PPI của page sát trung bình ngách. Theo dõi thêm 1–2 tuần trước khi điều chỉnh.'; }
+        const posts=this.topPosts.filter((_,i)=>i<5).map((tpp,i)=>({caption:tpp.caption,time:tpp.time,thumbBg:this.avatarBg(tpp.caption+i),
+          rate:this.pct(tpp.rateN),reach:this.vShort(tpp.reachN),neg:this.pct(tpp.negN),negStyle:this.negStyle(tpp.negN,false)}));
+        pd={name:p.name,initials:this.initials(p.name),avatarBg:this.avatarBg(p.name),
+          nicheId:p.nicheId,nicheName:nc.name,nicheColor:nc.color,nicheTint:this.tint(nc.color),
+          followerLabel:this.vShort(p.follower),groupName:g?g.name:'—',
+          onChangeNiche:(e)=>this.changeNiche(p.id,e.target.value),
+          kpis:[
+            {label:'Follower',value:this.int(p.follower)},
+            {label:'Số bài đăng',value:this.int(p.posts)},
+            {label:'Lượt thích',value:this.int(p.likes)},
+            {label:'Bình luận',value:this.int(p.comments)},
+            {label:'Interaction rate',value:this.pct(p.rate)},
+            {label:'Reach/ngày',value:this.vShort(p.reach)},
+            {label:'Page Perf. Index',value:this.pct(p.ppi)},
+            {label:'Daily Views',value:this.vShort(p.views)},
+          ],
+          posts, sugNiche:sug, sugText, sugColor, sugTint, sugBorder, sugHead,
+          ppiLabel:this.pct(p.ppi), nicheAvgPpi:this.pct(nc.ppi),
+          diffLabel:(diff>=0?'+':'')+this.pct(+diff.toFixed(0)), diffColor: diff>=0?'var(--good,#16a34a)':'var(--danger,#dc2626)'};
+      }
+    }
+
+    // ---- modal
+    const M=S.modal;
+    let modalVals={};
+    if(M){
+      const term=S.modalSearch.toLowerCase();
+      const mp=S.pages.filter(p=>p.name.toLowerCase().includes(term)).map(p=>({name:p.name,initials:this.initials(p.name),avatarBg:this.avatarBg(p.name),
+        nicheName:this.nicheById(p.nicheId).name, checked:!!M.pages[p.id],
+        onToggle:()=>this.setState(s=>({modal:{...s.modal,pages:{...s.modal.pages,[p.id]:!s.modal.pages[p.id]}}}))}));
+      const swatchColors=['#2563eb','#7c3aed','#ea580c','#16a34a','#d97706','#0891b2','#db2777','#65a30d'];
+      const swatches=swatchColors.map(c=>({onClick:()=>this.setState(s=>({modal:{...s.modal,color:c}})),
+        style:'width:30px;height:30px;border-radius:8px;cursor:pointer;background:'+c+';border:'+(M.color===c?'3px solid var(--text,#14171a)':'2px solid transparent')+';outline:1px solid var(--border,#e5e7eb)'}));
+      modalVals={modalTitle:M.id?'Chỉnh ngách':'Tạo ngách mới', modalName:M.name, modalColor:M.color, modalTint:this.tint(M.color),
+        modalIcon:(M.name.trim()[0]||'N').toUpperCase(), modalSearch:S.modalSearch,
+        modalSelectedCount:Object.values(M.pages).filter(Boolean).length, modalPages:mp, modalSwatches:swatches,
+        onModalName:(e)=>this.setState(s=>({modal:{...s.modal,name:e.target.value}})),
+        onModalSearch:(e)=>this.setState({modalSearch:e.target.value})};
+    }
+
+    const activeNiche = active ? {...active, tint:this.tint(active.color)} : {color:'#000',tint:'#eee',name:''};
+
+    return {
+      rootRef,
+      isLogin:S.screen==='login', isApp:S.screen!=='login',
+      isDashboard:S.screen==='dashboard', isCatalog:S.screen==='catalog', isPage:S.screen==='page',
+      onLogin:(e)=>{ e.preventDefault(); this.setState({screen:'dashboard'}); },
+      navItems, toggleTheme:()=>this.setState(s=>({theme:s.theme==='dark'?'light':'dark'})),
+      themeGlyph:S.theme==='dark'?'☀':'☾', themeLabel:S.theme==='dark'?'Chế độ sáng':'Chế độ tối', themeHint:S.theme==='dark'?'Dark':'Light',
+      pageTitle: S.screen==='dashboard'?'Dashboard tổng thể': S.screen==='catalog'?'Danh mục ngách & nhóm page': S.screen==='page'?'Chi tiết fanpage':'',
+      showFilters: S.screen==='dashboard'||S.screen==='catalog',
+      groups:S.groups, niches, nicheFilter:S.nicheFilter, nicheFilterVal:S.nicheFilter||'all', groupFilter:S.groupFilter,
+      onGroupChange:(e)=>this.setState({groupFilter:e.target.value}),
+      onNicheChange:(e)=>this.setState({nicheFilter:e.target.value==='all'?null:e.target.value}),
+      clearNiche:()=>this.setState({nicheFilter:null}), activeNiche,
+      kpis, lineScopeLabel: nf?active.name:'toàn hệ thống',
+      lineRef:mkChartRef('line'), doughnutRef:mkChartRef('doughnut'), barRef:mkChartRef('bar'),
+      topPostsSorted, topSort, trends, barMetrics,
+      tree, allowDrop:(e)=>e.preventDefault(),
+      bulkOpen:selIds.length>0, bulkCount:selIds.length, bulkNiches, clearSelection:()=>this.setState({selected:{}}),
+      openNewNiche:()=>this.setState({modal:{id:null,name:'',color:'#0891b2',pages:{}},modalSearch:''}),
+      modalOpen:!!M, closeModal:()=>this.setState({modal:null}), stop:(e)=>e.stopPropagation(), saveNiche:()=>this.saveNiche(),
+      ...modalVals,
+      pd, backToCatalog:()=>this.setState({screen:'catalog'}),
+    };
+  }
+
+  // ---------- mutations ----------
+  toggleSort(t,col){ this.setState(s=>{ const cur=s.sort[t]; let next; if(cur&&cur.col===col){ next={col,dir:cur.dir==='desc'?'asc':'desc'}; } else next={col,dir:'desc'}; return {sort:{...s.sort,[t]:next}}; }); }
+  toggleSelect(id){ this.setState(s=>({selected:{...s.selected,[id]:!s.selected[id]}})); }
+  toggleGroupSelect(ids,on){ this.setState(s=>{ const sel={...s.selected}; ids.forEach(id=>sel[id]=on); return {selected:sel}; }); }
+  bulkAssign(nicheId){ this.setState(s=>{ const ids=Object.keys(s.selected).filter(k=>s.selected[k]); const pages=s.pages.map(p=> ids.includes(p.id)?{...p,nicheId}:p); return {pages,selected:{}}; }); }
+  movePage(pageId,groupId,subId){ if(!pageId) return; this.setState(s=>({pages:s.pages.map(p=>p.id===pageId?{...p,groupId,subId}:p),dragId:null})); }
+  changeNiche(pageId,nicheId){ this.setState(s=>({pages:s.pages.map(p=>p.id===pageId?{...p,nicheId}:p)})); }
+  saveNiche(){ this.setState(s=>{ const M=s.modal; const name=M.name.trim()||'Ngách mới'; const id=M.id||('n'+Date.now());
+    const selIds=Object.keys(M.pages).filter(k=>M.pages[k]);
+    const sp=s.pages.filter(p=>selIds.includes(p.id));
+    const agg={pages:selIds.length||1, views:sp.reduce((a,p)=>a+p.views,0)||500000, reach:sp.reduce((a,p)=>a+p.reach,0)||200000,
+      rate:+(sp.length?sp.reduce((a,p)=>a+p.rate,0)/sp.length:4).toFixed(1), ppi:Math.round(sp.length?sp.reduce((a,p)=>a+p.ppi,0)/sp.length:70)};
+    let niches, pages=s.pages;
+    if(M.id){ niches=s.niches.map(n=>n.id===M.id?{...n,name,color:M.color,icon:name[0].toUpperCase()}:n); }
+    else { niches=[...s.niches,{id,name,color:M.color,icon:name[0].toUpperCase(),...agg}]; pages=s.pages.map(p=>selIds.includes(p.id)?{...p,nicheId:id}:p); }
+    if(this.charts.doughnut){this.charts.doughnut.destroy();this.charts.doughnut=null;}
+    if(this.charts.bar){this.charts.bar.destroy();this.charts.bar=null;}
+    return {niches,pages,modal:null,modalSearch:''}; }); }
+}
+</script>
+</body>
+</html>

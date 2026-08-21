@@ -1,0 +1,211 @@
+// Fanpage CRM data model.
+// Hierarchy: User — Niche (ngách) — Group (nhóm 25 page) — SubGroup — Page — TopPost.
+//
+// Mỗi User là một không gian dữ liệu riêng: MỌI bảng nghiệp vụ đều mang `userId`
+// và mọi truy vấn phải lọc theo nó (xem `requireUser` trong lib/session.ts).
+// Hai người dùng có thể theo dõi cùng một fanpage — nên khóa tự nhiên của Page
+// là (userId, ref) chứ không phải Profile-ID toàn cục.
+// Production chạy PostgreSQL (Neon); local vẫn giữ file SQLite cũ để lùi khi cần.
+//
+// Dữ liệu duy nhất đến từ báo cáo Fanpage Karma nhập qua /api/import. Không có
+// dữ liệu mẫu: DB rỗng cho tới lần nhập đầu tiên.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // Chuỗi pooled (PgBouncer) — dùng cho runtime serverless: mỗi instance chỉ giữ
+  // 1 kết nối, không làm cạn connection pool của Neon.
+  url       = env("DATABASE_URL")
+  // Chuỗi direct — Prisma bắt buộc phải có để chạy migration (PgBouncer không
+  // chạy được DDL trong transaction).
+  directUrl = env("DIRECT_URL")
+}
+
+/// Một tài khoản = một không gian dữ liệu độc lập. Xóa user là xóa sạch dữ liệu
+/// của họ (cascade). Mật khẩu lưu dạng scrypt "salt:hash" (xem lib/auth.ts).
+model User {
+  id        String     @id
+  email     String     @unique
+  name      String
+  password  String
+  createdAt DateTime   @default(now())
+  niches    Niche[]
+  groups    Group[]
+  subs      SubGroup[]
+  pages     Page[]
+  topPosts  TopPost[]
+  trends    Trend[]
+  snapshots Snapshot[]
+}
+
+/// Ngách. Các cột agg* là số liệu cộng dồn từ chính Page[] thuộc ngách,
+/// tính lại sau mỗi lần nhập báo cáo (xem refreshNiches trong /api/import).
+model Niche {
+  id        String     @id
+  name      String
+  color     String
+  icon      String
+  aggPages  Int        @default(0)
+  aggViews  Int        @default(0)
+  aggReach  Int        @default(0)
+  aggRate   Float      @default(0)
+  aggPpi    Int        @default(0)
+  order     Int        @default(0)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  pages     Page[]
+  topPosts  TopPost[]
+  trends    Trend[]
+  snapshots Snapshot[]
+
+  @@index([userId])
+}
+
+model Group {
+  id     String     @id
+  name   String
+  order  Int        @default(0)
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  subs   SubGroup[]
+  pages  Page[]
+
+  @@index([userId])
+}
+
+model SubGroup {
+  id      String @id
+  name    String
+  order   Int    @default(0)
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId  String
+  pages   Page[]
+
+  @@index([userId])
+}
+
+/// Một fanpage trong không gian của một user. `ref` = Profile-ID của Fanpage
+/// Karma (hoặc id sinh theo tên khi báo cáo thiếu ID) nên hai loại báo cáo
+/// (benchmark & top content) của cùng một list page ghép được vào nhau. `id` chỉ
+/// là khóa nội bộ: cùng một fanpage ở hai tài khoản là hai bản ghi khác nhau.
+model Page {
+  id       String @id
+  /// Profile-ID của báo cáo — khóa ghép dữ liệu, duy nhất trong phạm vi 1 user.
+  ref      String
+  /// Tên đã chuẩn hóa (thường + bỏ dấu cách thừa) — khóa lọc trùng khi báo
+  /// cáo thiếu Profile-ID.
+  slug     String
+  name     String
+  follower Int
+  posts    Int
+  likes    Int
+  comments Int
+  rate     Float // Post interaction rate (%)
+  ppi      Int // Page Performance Index (%)
+  views    Int // Daily Views
+  reach    Int // Reach per day
+
+  network    String? // FACEBOOK / INSTAGRAM / …
+  url        String? // Link trang thật (cột External Links)
+  /// Mốc cuối kỳ của báo cáo benchmark đã dùng cho các số liệu trên.
+  reportedAt DateTime?
+  /// Tên file báo cáo benchmark gần nhất đã ghi đè số liệu.
+  source     String?
+
+  group    Group     @relation(fields: [groupId], references: [id])
+  groupId  String
+  sub      SubGroup  @relation(fields: [subId], references: [id])
+  subId    String
+  niche    Niche     @relation(fields: [nicheId], references: [id])
+  nicheId  String
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId   String
+  topPosts TopPost[]
+
+  @@unique([userId, ref])
+  @@index([groupId])
+  @@index([subId])
+  @@index([nicheId])
+  @@index([userId, slug])
+}
+
+/// Khớp cột Karmar "Top Posts". Gắn với Page qua Profile-ID để trang chi tiết
+/// page hiển thị đúng bài của page đó.
+model TopPost {
+  id       String  @id
+  /// Message-ID của báo cáo — duy nhất trong phạm vi 1 user.
+  ref      String
+  caption  String
+  pageName String
+  time     String
+  likes    Int
+  comments Int
+  rcs      Int // Reactions/Comments/Shares gộp
+  rate     Float // Post interaction rate (%)
+  reach    Int // Reach per post
+  ipi      Float // Interactions per impression/view (%)
+  neg      Float // Negative sentiment share (%)
+  link     String?
+  /// Ảnh thumbnail của bài (cột "Image Link"). URL fbcdn có hạn dùng vài ngày
+  /// nên UI phải chịu được ảnh chết — nhập lại báo cáo là có link mới.
+  image    String?
+  order    Int     @default(0)
+
+  /// Profile-ID trong báo cáo top content + tên page đã chuẩn hóa. Giữ lại để
+  /// nối được về Page kể cả khi báo cáo nội dung nhập trước báo cáo benchmark.
+  pageRef  String?
+  pageSlug String?
+
+  niche   Niche   @relation(fields: [nicheId], references: [id])
+  nicheId String
+  page    Page?   @relation(fields: [pageId], references: [id], onDelete: SetNull)
+  pageId  String?
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId  String
+
+  @@unique([userId, ref])
+  @@index([nicheId])
+  @@index([pageId])
+  @@index([userId, pageRef])
+}
+
+/// Hashtag nổi bật lấy từ sheet "Top 50 Hashtags" của báo cáo top content.
+model Trend {
+  id      String @id
+  term    String
+  posts   Int
+  rate    String
+  order   Int    @default(0)
+  niche   Niche  @relation(fields: [nicheId], references: [id], onDelete: Cascade)
+  nicheId String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId  String
+
+  @@index([nicheId])
+  @@index([userId])
+}
+
+/// Ảnh chụp số liệu tại mốc cuối kỳ của một báo cáo — nguồn cho biểu đồ tăng
+/// trưởng. `nicheId` null = toàn hệ thống. `id` sinh theo (scope, ngày) nên nhập
+/// lại cùng một báo cáo chỉ ghi đè, không tạo điểm trùng.
+model Snapshot {
+  id      String   @id
+  takenAt DateTime
+  pages   Int
+  views   Int
+  reach   Int
+  rate    Float
+  ppi     Int
+  niche   Niche?   @relation(fields: [nicheId], references: [id], onDelete: Cascade)
+  nicheId String?
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId  String
+
+  @@index([nicheId, takenAt])
+  @@index([userId, takenAt])
+}
