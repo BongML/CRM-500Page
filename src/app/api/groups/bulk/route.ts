@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { refreshNiches } from "@/lib/aggregate";
-import { requireUser } from "@/lib/session";
+import { requireScope, scopeWhere } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,9 +18,9 @@ export const runtime = "nodejs";
  * cũng bị dọn để không còn bài mồ côi vẫn tính vào số liệu ngách.
  */
 export async function DELETE(req: Request) {
-  const auth = await requireUser();
+  const auth = await requireScope();
   if (!auth.ok) return auth.response;
-  const { userId } = auth;
+  const where = scopeWhere(auth.scope);
 
   const { ids, withPages } = (await req.json().catch(() => ({}))) as {
     ids?: string[];
@@ -31,9 +31,9 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "Chưa chọn nhóm nào." }, { status: 400 });
   }
 
-  // Lọc theo userId trước: không đụng được nhóm của tài khoản khác dù biết id.
+  // Lọc theo phạm vi trước: không đụng được nhóm ngoài tầm dù biết id.
   const mine = await prisma.group.findMany({
-    where: { id: { in: ids }, userId },
+    where: { id: { in: ids }, ...where },
     select: { id: true, name: true },
   });
   if (!mine.length) {
@@ -41,8 +41,9 @@ export async function DELETE(req: Request) {
   }
 
   const groupIds = mine.map((g) => g.id);
+  // groupId là khóa chính toàn cục nên lọc theo nhóm là đủ.
   const inside = await prisma.page.findMany({
-    where: { userId, groupId: { in: groupIds } },
+    where: { groupId: { in: groupIds } },
     select: { id: true, nicheId: true },
   });
 
@@ -60,12 +61,12 @@ export async function DELETE(req: Request) {
   let posts = 0;
   if (inside.length) {
     const pageIds = inside.map((p) => p.id);
-    posts = (await prisma.topPost.deleteMany({ where: { userId, pageId: { in: pageIds } } })).count;
-    await prisma.page.deleteMany({ where: { id: { in: pageIds }, userId } });
+    posts = (await prisma.topPost.deleteMany({ where: { pageId: { in: pageIds } } })).count;
+    await prisma.page.deleteMany({ where: { id: { in: pageIds } } });
   }
 
-  await prisma.subGroup.deleteMany({ where: { userId, groupId: { in: groupIds } } });
-  const deleted = await prisma.group.deleteMany({ where: { id: { in: groupIds }, userId } });
+  await prisma.subGroup.deleteMany({ where: { groupId: { in: groupIds } } });
+  const deleted = await prisma.group.deleteMany({ where: { id: { in: groupIds } } });
 
   // Ngách của các page vừa mất phải tính lại, nếu không dashboard treo số cũ.
   if (inside.length) await refreshNiches(inside.map((p) => p.nicheId));

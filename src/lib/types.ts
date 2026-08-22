@@ -1,5 +1,7 @@
 export type Niche = {
   id: string;
+  /** Chủ sở hữu — chỉ có mặt khi tài khoản tổng đang xem gộp nhiều tài khoản. */
+  userId?: string;
   name: string;
   color: string;
   icon: string;
@@ -11,11 +13,13 @@ export type Niche = {
   order: number;
 };
 
-export type Group = { id: string; name: string; order: number };
-export type Sub = { id: string; name: string; groupId: string; order: number };
+export type Group = { id: string; name: string; order: number; userId?: string };
+export type Sub = { id: string; name: string; groupId: string; order: number; userId?: string };
 
 export type Page = {
   id: string;
+  /** Chủ sở hữu — chỉ có mặt khi tài khoản tổng đang xem gộp nhiều tài khoản. */
+  userId?: string;
   /** Profile-ID trong báo cáo Karmar — khóa ghép dữ liệu giữa hai loại báo cáo. */
   ref: string;
   /** Tên chuẩn hóa — khóa lọc trùng khi báo cáo thiếu Profile-ID. */
@@ -82,8 +86,30 @@ export type Snapshot = {
   ppi: number;
 };
 
-/** Tài khoản đang đăng nhập. */
-export type SessionUser = { id: string; email: string; name: string };
+/** Tài khoản đang đăng nhập. `role` = "admin" là tài khoản tổng. */
+export type SessionUser = { id: string; email: string; name: string; role: string };
+
+/** Chủ sở hữu dữ liệu — dùng để chú thích page/ngách của ai khi xem gộp. */
+export type Owner = { id: string; name: string; email: string };
+
+/**
+ * Phạm vi dữ liệu đang xem. `userId === null` + `admin` = toàn hệ thống (dữ
+ * liệu của mọi tài khoản gộp lại).
+ */
+export type Scope = { admin: boolean; userId: string | null };
+
+/** Một dòng trong bảng quản lý người dùng của tài khoản tổng. */
+export type AdminUser = {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  createdAt: string;
+  pages: number;
+  niches: number;
+  groups: number;
+  posts: number;
+};
 
 export type Bootstrap = {
   niches: Niche[];
@@ -93,6 +119,9 @@ export type Bootstrap = {
   topPosts: TopPost[];
   trends: Trend[];
   snapshots: Snapshot[];
+  /** Rỗng trừ khi tài khoản tổng đang xem toàn hệ thống. */
+  owners: Owner[];
+  scope: Scope;
   negThreshold: number;
 };
 

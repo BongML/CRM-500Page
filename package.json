@@ -12,7 +12,8 @@
     "db:clear": "tsx prisma/reset.ts",
     "db:reset": "prisma db push --force-reset",
     "db:migrate": "prisma migrate dev",
-    "db:deploy": "node scripts/migrate.mjs"
+    "db:deploy": "node scripts/migrate.mjs",
+    "admin": "tsx prisma/scripts/admin.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",

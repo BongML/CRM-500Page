@@ -1,6 +1,7 @@
 "use client";
 
-import type { Screen } from "@/lib/types";
+import { initials } from "@/lib/format";
+import type { Screen, SessionUser } from "@/lib/types";
 import type { Theme } from "@/lib/theme";
 
 const NAV: { id: Screen; label: string; glyph: string }[] = [
@@ -12,14 +13,17 @@ const NAV: { id: Screen; label: string; glyph: string }[] = [
 export default function Sidebar({
   screen,
   theme,
+  user,
   onNavigate,
   onToggleTheme,
 }: {
   screen: Screen;
   theme: Theme;
+  user: SessionUser | null;
   onNavigate: (s: Screen) => void;
   onToggleTheme: () => void;
 }) {
+  const admin = user?.role === "admin";
   return (
     <aside
       style={{
@@ -156,11 +160,24 @@ export default function Sidebar({
               fontSize: 12,
             }}
           >
-            AD
+            {user ? initials(user.name || user.email) : "?"}
           </div>
-          <div style={{ lineHeight: 1.25 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 500 }}>Admin</div>
-            <div style={{ fontSize: 11, color: "var(--muted)" }}>admin@crm.vn</div>
+          <div style={{ lineHeight: 1.25, minWidth: 0 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 500 }}>
+              {user?.name || "Chưa đăng nhập"}
+            </div>
+            <div
+              style={{
+                fontSize: 11,
+                color: "var(--muted)",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                maxWidth: 150,
+              }}
+            >
+              {admin ? "Tài khoản tổng" : user?.email ?? ""}
+            </div>
           </div>
         </div>
       </div>

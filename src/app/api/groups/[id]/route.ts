@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/api";
-import { requireUser } from "@/lib/session";
+import { requireScope, scopeWhere } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 /** Đổi tên nhóm. Body: { name } */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const auth = await requireUser();
+  const auth = await requireScope();
   if (!auth.ok) return auth.response;
 
   const { id } = await ctx.params;
@@ -17,9 +17,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (!label) return NextResponse.json({ error: "Tên nhóm không được để trống." }, { status: 400 });
 
   try {
-    // updateMany + userId: nhóm của người khác không đổi được, kể cả khi biết id.
+    // updateMany + bộ lọc phạm vi: nhóm ngoài tầm không đổi được, kể cả khi biết id.
     const done = await prisma.group.updateMany({
-      where: { id, userId: auth.userId },
+      where: { id, ...scopeWhere(auth.scope) },
       data: { name: label },
     });
     if (!done.count) {
@@ -33,12 +33,18 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
 /** Xóa nhóm — chỉ khi không còn page nào bên trong. */
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const auth = await requireUser();
+  const auth = await requireScope();
   if (!auth.ok) return auth.response;
 
   const { id } = await ctx.params;
 
-  const pages = await prisma.page.count({ where: { groupId: id, userId: auth.userId } });
+  const group = await prisma.group.findFirst({
+    where: { id, ...scopeWhere(auth.scope) },
+    select: { id: true },
+  });
+  if (!group) return NextResponse.json({ error: "Nhóm không còn tồn tại." }, { status: 404 });
+
+  const pages = await prisma.page.count({ where: { groupId: id } });
   if (pages > 0) {
     return NextResponse.json(
       { error: `Nhóm còn ${pages} page. Chuyển các page sang nhóm khác trước khi xóa.` },
@@ -48,7 +54,7 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
 
   try {
     // sub-group xóa theo (cascade)
-    const done = await prisma.group.deleteMany({ where: { id, userId: auth.userId } });
+    const done = await prisma.group.deleteMany({ where: { id, ...scopeWhere(auth.scope) } });
     if (!done.count) {
       return NextResponse.json({ error: "Nhóm không còn tồn tại." }, { status: 404 });
     }

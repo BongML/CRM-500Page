@@ -31,6 +31,9 @@ model User {
   email     String     @unique
   name      String
   password  String
+  /// "admin" = tài khoản tổng: đọc/sửa được dữ liệu của MỌI user (xem lib/session.ts).
+  /// "user"  = chỉ thấy không gian của chính mình.
+  role      String     @default("user")
   createdAt DateTime   @default(now())
   niches    Niche[]
   groups    Group[]

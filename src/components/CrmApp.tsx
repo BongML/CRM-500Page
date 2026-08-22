@@ -3,7 +3,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTheme } from "@/lib/useTheme";
 import { hotLevel } from "@/lib/rank";
-import type { Bootstrap, Group, Niche, Page, Screen, Snapshot, Sub, TopPost, Trend, SessionUser } from "@/lib/types";
+import type {
+  AdminUser,
+  Bootstrap,
+  Group,
+  Niche,
+  Owner,
+  Page,
+  Screen,
+  Snapshot,
+  Sub,
+  TopPost,
+  Trend,
+  SessionUser,
+} from "@/lib/types";
 import LoginScreen from "./LoginScreen";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
@@ -45,7 +58,14 @@ export default function CrmApp({ initial }: { initial: Bootstrap }) {
   const [trends, setTrends] = useState<Trend[]>(initial.trends);
   const [snapshots, setSnapshots] = useState<Snapshot[]>(initial.snapshots);
 
+  const [owners, setOwners] = useState<Owner[]>(initial.owners);
+
   const [user, setUser] = useState<SessionUser | null>(null);
+  // Tài khoản tổng: danh sách người dùng + phạm vi dữ liệu đang xem
+  // (null = gộp toàn hệ thống).
+  const [accounts, setAccounts] = useState<AdminUser[]>([]);
+  const [scopeUserId, setScopeUserId] = useState<string | null>(initial.scope.userId);
+  const [defaultPassword, setDefaultPassword] = useState(false);
   const [screen, setScreen] = useState<Screen>("login");
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
   const [nicheFilter, setNicheFilter] = useState<string | null>(null);
@@ -55,17 +75,34 @@ export default function CrmApp({ initial }: { initial: Bootstrap }) {
   const [manageTab, setManageTab] = useState<ManageTab>("import");
   const [error, setError] = useState<string | null>(null);
 
+  /** Danh sách tài khoản cho ô chọn phạm vi + tab Người dùng (chỉ admin gọi được). */
+  const loadAccounts = useCallback(async () => {
+    const res = await fetch("/api/admin/users");
+    if (!res.ok) return;
+    const data: { users: AdminUser[]; defaultPassword: boolean } = await res.json();
+    setAccounts(data.users);
+    setDefaultPassword(data.defaultPassword);
+  }, []);
+
   // Còn phiên đăng nhập thì vào thẳng dashboard.
   useEffect(() => {
     fetch("/api/session")
       .then((r) => r.json())
-      .then((s: { authed: boolean; user: SessionUser | null }) => {
-        if (!s.authed || !s.user) return;
-        setUser(s.user);
-        setScreen("dashboard");
-      })
+      .then(
+        (s: {
+          authed: boolean;
+          user: SessionUser | null;
+          scope: { admin: boolean; userId: string | null } | null;
+        }) => {
+          if (!s.authed || !s.user) return;
+          setUser(s.user);
+          setScopeUserId(s.scope?.userId ?? null);
+          setScreen("dashboard");
+          if (s.user.role === "admin") loadAccounts().catch(() => undefined);
+        },
+      )
       .catch(() => undefined);
-  }, []);
+  }, [loadAccounts]);
 
   /** Nạp lại toàn bộ dữ liệu (dùng sau khi nhập .xlsx). */
   const refresh = useCallback(async () => {
@@ -77,6 +114,8 @@ export default function CrmApp({ initial }: { initial: Bootstrap }) {
     setTopPosts(data.topPosts);
     setTrends(data.trends);
     setSnapshots(data.snapshots);
+    setOwners(data.owners ?? []);
+    setScopeUserId(data.scope?.userId ?? null);
   }, []);
 
   const fail = useCallback((e: unknown) => {
@@ -339,11 +378,75 @@ export default function CrmApp({ initial }: { initial: Bootstrap }) {
     [fail],
   );
 
+  // ---- tài khoản tổng: phạm vi dữ liệu + quản lý người dùng ----
+
+  /**
+   * Đổi phạm vi dữ liệu: null = gộp toàn hệ thống, hoặc bước vào không gian của
+   * một tài khoản. Bộ lọc và ô đang chọn bị xóa vì chúng trỏ tới id của phạm vi cũ.
+   */
+  const changeScope = useCallback(
+    async (id: string | null) => {
+      try {
+        await api("/api/admin/scope", "POST", { userId: id });
+        setScopeUserId(id);
+        setSelected({});
+        setSelectedPageId(null);
+        setNicheFilter(null);
+        setGroupFilter("all");
+        await refresh();
+      } catch (e) {
+        fail(e);
+      }
+    },
+    [fail, refresh],
+  );
+
+  const createAccount = useCallback(
+    async (v: { email: string; password: string; name: string; role: string }) => {
+      try {
+        await api("/api/admin/users", "POST", v);
+        await loadAccounts();
+      } catch (e) {
+        fail(e);
+      }
+    },
+    [fail, loadAccounts],
+  );
+
+  const updateAccount = useCallback(
+    async (id: string, v: { name?: string; password?: string; role?: string }) => {
+      try {
+        await api(`/api/admin/users/${id}`, "PATCH", v);
+        await loadAccounts();
+      } catch (e) {
+        fail(e);
+      }
+    },
+    [fail, loadAccounts],
+  );
+
+  /** Xóa tài khoản = xóa sạch dữ liệu của họ, nên phải nạp lại cả hai phía. */
+  const deleteAccount = useCallback(
+    async (id: string) => {
+      try {
+        await api(`/api/admin/users/${id}`, "DELETE");
+        if (scopeUserId === id) setScopeUserId(null);
+        await loadAccounts();
+        await refresh();
+      } catch (e) {
+        fail(e);
+      }
+    },
+    [fail, loadAccounts, refresh, scopeUserId],
+  );
+
   if (screen === "login") {
     return (
       <LoginScreen
         onDone={async (who) => {
           setUser(who);
+          setScopeUserId(null);
+          if (who.role === "admin") await loadAccounts().catch(() => undefined);
           // Dữ liệu render sẵn ở server là của phiên trước (hoặc rỗng) — nạp lại
           // theo đúng tài khoản vừa vào.
           await refresh().catch(fail);
@@ -358,6 +461,7 @@ export default function CrmApp({ initial }: { initial: Bootstrap }) {
       <Sidebar
         screen={screen}
         theme={theme}
+        user={user}
         onNavigate={(s) => {
           setScreen(s);
           setSelectedPageId(null);
@@ -380,6 +484,9 @@ export default function CrmApp({ initial }: { initial: Bootstrap }) {
             setScreen("manage");
           }}
           user={user}
+          accounts={accounts}
+          scopeUserId={scopeUserId}
+          onScope={changeScope}
           onLogout={async () => {
             await fetch("/api/login", { method: "DELETE" }).catch(() => undefined);
             setUser(null);
@@ -391,6 +498,10 @@ export default function CrmApp({ initial }: { initial: Bootstrap }) {
             setTopPosts([]);
             setTrends([]);
             setSnapshots([]);
+            setOwners([]);
+            setAccounts([]);
+            setScopeUserId(null);
+            setDefaultPassword(false);
             setSelectedPageId(null);
             setSelected({});
             setScreen("login");
@@ -419,10 +530,16 @@ export default function CrmApp({ initial }: { initial: Bootstrap }) {
             topPosts={topPosts}
             trends={trends}
             snapshots={snapshots}
+            owners={owners}
             nicheFilter={nicheFilter}
             negThreshold={initial.negThreshold}
             theme={theme}
             onNicheFilter={setNicheFilter}
+            onOpenPage={(id) => {
+              setSelectedPageId(id);
+              setScreen("page");
+            }}
+            onOpenOwner={user?.role === "admin" ? changeScope : undefined}
             onImport={() => {
               setManageTab("import");
               setScreen("manage");
@@ -436,6 +553,7 @@ export default function CrmApp({ initial }: { initial: Bootstrap }) {
             groups={visibleGroups}
             subs={subs}
             pages={visiblePages}
+            owners={owners}
             selected={selected}
             theme={theme}
             onToggleSelect={(id) => setSelected((s) => ({ ...s, [id]: !s[id] }))}
@@ -478,6 +596,21 @@ export default function CrmApp({ initial }: { initial: Bootstrap }) {
             onDeleteSub={deleteSub}
             onOpenNicheModal={setModal}
             onDeleteNiche={deleteNiche}
+            owners={owners}
+            users={
+              user?.role === "admin"
+                ? {
+                    list: accounts,
+                    me: user.id,
+                    scopeUserId,
+                    defaultPassword,
+                    onCreate: createAccount,
+                    onUpdate: updateAccount,
+                    onDelete: deleteAccount,
+                    onOpenScope: changeScope,
+                  }
+                : undefined
+            }
           />
         )}
 

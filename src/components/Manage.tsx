@@ -2,15 +2,28 @@
 
 import { useState } from "react";
 import { screenPad } from "@/lib/ui";
-import type { Group, Niche, Page, Sub } from "@/lib/types";
+import type { AdminUser, Group, Niche, Owner, Page, Sub } from "@/lib/types";
 import type { NicheDraft } from "./NicheModal";
 import ArrangePanel from "./ArrangePanel";
 import ImportPanel from "./ImportPanel";
 import ManageGroups from "./ManageGroups";
 import ManageNiches from "./ManageNiches";
 import ManagePages from "./ManagePages";
+import ManageUsers from "./ManageUsers";
 
-type Tab = "import" | "arrange" | "pages" | "groups" | "niches";
+type Tab = "import" | "arrange" | "pages" | "groups" | "niches" | "users";
+
+/** Bảng điều khiển người dùng — chỉ tài khoản tổng mới nhận prop này. */
+export type UsersPanel = {
+  list: AdminUser[];
+  me: string | null;
+  scopeUserId: string | null;
+  defaultPassword: boolean;
+  onCreate: (v: { email: string; password: string; name: string; role: string }) => void;
+  onUpdate: (id: string, v: { name?: string; password?: string; role?: string }) => void;
+  onDelete: (id: string) => void;
+  onOpenScope: (id: string | null) => void;
+};
 
 const TABS: { id: Tab; label: string; hint: string }[] = [
   { id: "import", label: "Nhập dữ liệu", hint: "Tải file .xlsx từ Karmar" },
@@ -18,6 +31,7 @@ const TABS: { id: Tab; label: string; hint: string }[] = [
   { id: "pages", label: "Gán page", hint: "Ngách & nhóm cho từng page" },
   { id: "groups", label: "Nhóm page", hint: "Tạo / sửa / xóa nhóm" },
   { id: "niches", label: "Ngách", hint: "Tạo / sửa / xóa ngách" },
+  { id: "users", label: "Người dùng", hint: "Tài khoản và dữ liệu của từng người" },
 ];
 
 /**
@@ -46,6 +60,8 @@ export default function Manage({
   onDeleteSub,
   onOpenNicheModal,
   onDeleteNiche,
+  owners,
+  users,
 }: {
   tab: Tab;
   onTab: (t: Tab) => void;
@@ -68,6 +84,9 @@ export default function Manage({
   onDeleteSub: (id: string) => void;
   onOpenNicheModal: (draft: NicheDraft) => void;
   onDeleteNiche: (id: string, moveTo: string | null) => void;
+  /** Chủ sở hữu dữ liệu — chỉ khác rỗng khi tài khoản tổng xem gộp nhiều tài khoản. */
+  owners: Owner[];
+  users?: UsersPanel;
 }) {
   const [confirm, setConfirm] = useState<string | null>(null);
 
@@ -83,7 +102,7 @@ export default function Manage({
           paddingBottom: 12,
         }}
       >
-        {TABS.map((t) => {
+        {TABS.filter((t) => t.id !== "users" || users).map((t) => {
           const active = tab === t.id;
           return (
             <button
@@ -119,6 +138,7 @@ export default function Manage({
           niches={niches}
           groups={groups}
           subs={subs}
+          owners={owners}
           onAssignNiche={onAssignNiche}
           onMovePage={onMovePage}
           onBulk={onBulk}
@@ -163,6 +183,19 @@ export default function Manage({
           onCreateSub={onCreateSub}
           onRenameSub={onRenameSub}
           onDeleteSub={onDeleteSub}
+        />
+      )}
+
+      {tab === "users" && users && (
+        <ManageUsers
+          users={users.list}
+          me={users.me}
+          scopeUserId={users.scopeUserId}
+          defaultPassword={users.defaultPassword}
+          onCreate={users.onCreate}
+          onUpdate={users.onUpdate}
+          onDelete={users.onDelete}
+          onOpenScope={users.onOpenScope}
         />
       )}
 

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/auth";
+import { adminEmail, ensureAdmin } from "@/lib/admin";
 import { checkLimit, clearFailures, clientIp, noteFailure } from "@/lib/ratelimit";
-import { clearSessionCookie, setSessionCookie } from "@/lib/session";
+import { clearScopeCookie, clearSessionCookie, setSessionCookie } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -23,6 +24,10 @@ export async function POST(req: Request) {
     );
   }
 
+  // Tài khoản tổng được dựng ngay lần đăng nhập đầu tiên — không cần chạy
+  // script sau khi deploy. Mật khẩu vẫn phải khớp mới vào được.
+  if (email === adminEmail()) await ensureAdmin();
+
   const user = await prisma.user.findUnique({ where: { email } });
   // Cùng một thông báo cho email sai lẫn mật khẩu sai — không tiết lộ email nào đã đăng ký.
   if (!user || !verifyPassword(password, user.password)) {
@@ -32,11 +37,17 @@ export async function POST(req: Request) {
 
   clearFailures(key);
   await setSessionCookie(user.id);
-  return NextResponse.json({ ok: true, user: { id: user.id, email: user.email, name: user.name } });
+  // Phiên mới luôn bắt đầu ở phạm vi mặc định (admin: toàn hệ thống).
+  await clearScopeCookie();
+  return NextResponse.json({
+    ok: true,
+    user: { id: user.id, email: user.email, name: user.name, role: user.role },
+  });
 }
 
 /** Đăng xuất. */
 export async function DELETE() {
   await clearSessionCookie();
+  await clearScopeCookie();
   return NextResponse.json({ ok: true });
 }

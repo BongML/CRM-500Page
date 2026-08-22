@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/api";
 import { refreshNiches } from "@/lib/aggregate";
-import { requireUser } from "@/lib/session";
+import { requireScope, scopeWhere } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -11,11 +11,19 @@ export const dynamic = "force-dynamic";
  * Body: { name, color, pageIds?: string[] }
  */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const auth = await requireUser();
+  const auth = await requireScope();
   if (!auth.ok) return auth.response;
-  const { userId } = auth;
 
   const { id } = await ctx.params;
+
+  // Chủ sở hữu lấy từ chính ngách: tài khoản tổng sửa được ngách của mọi người,
+  // nhưng tập page gán vào vẫn phải là page của cùng chủ đó.
+  const owner = await prisma.niche.findFirst({
+    where: { id, ...scopeWhere(auth.scope) },
+    select: { userId: true },
+  });
+  if (!owner) return NextResponse.json({ error: "Ngách không còn tồn tại." }, { status: 404 });
+  const userId = owner.userId;
   const { name, color, pageIds } = (await req.json()) as {
     name?: string;
     color?: string;
@@ -60,13 +68,21 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
  * chuyển toàn bộ sang ngách khác trước khi xóa.
  */
 export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const auth = await requireUser();
+  const auth = await requireScope();
   if (!auth.ok) return auth.response;
-  const { userId } = auth;
 
   const { id } = await ctx.params;
   const moveTo = new URL(req.url).searchParams.get("moveTo");
 
+  const owner = await prisma.niche.findFirst({
+    where: { id, ...scopeWhere(auth.scope) },
+    select: { userId: true },
+  });
+  if (!owner) return NextResponse.json({ error: "Ngách không còn tồn tại." }, { status: 404 });
+  const userId = owner.userId;
+
+  // "Phải còn ít nhất 1 ngách" xét trong không gian của chủ ngách, không phải
+  // trên toàn hệ thống.
   const total = await prisma.niche.count({ where: { userId } });
   if (total <= 1) {
     return NextResponse.json({ error: "Phải còn ít nhất 1 ngách." }, { status: 409 });

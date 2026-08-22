@@ -112,8 +112,67 @@ export function Avatar({
   );
 }
 
-/** Thẻ KPI lớn của dashboard. */
-export function KpiCard({ label, value, sub }: { label: string; value: string; sub: string }) {
+/**
+ * Nhãn tăng/giảm so với kỳ báo cáo liền trước.
+ *
+ * `good` cho biết chiều nào là tốt: với views/reach thì tăng là tốt, nhưng nếu
+ * sau này cần theo dõi một chỉ số mà giảm mới là tốt thì đảo cờ này, không phải
+ * sửa màu ở chỗ gọi.
+ */
+export function DeltaTag({
+  pct,
+  title,
+  higherIsBetter = true,
+}: {
+  pct: number;
+  title?: string;
+  higherIsBetter?: boolean;
+}) {
+  const flat = Math.abs(pct) < 0.05;
+  const up = pct > 0;
+  const positive = higherIsBetter ? up : !up;
+  const color = flat ? "var(--muted)" : positive ? "var(--good)" : "var(--danger)";
+
+  return (
+    <span
+      title={title}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 3,
+        padding: "2px 7px",
+        borderRadius: 20,
+        fontSize: 11,
+        fontWeight: 700,
+        color,
+        background: flat ? "var(--surface-2)" : positive ? "rgba(22,163,74,.12)" : "var(--danger-soft)",
+        ...tnum,
+      }}
+    >
+      {flat ? "•" : up ? "▲" : "▼"}
+      {Math.abs(pct).toFixed(1).replace(".", ",")}%
+    </span>
+  );
+}
+
+/**
+ * Thẻ KPI lớn của dashboard. `delta` chỉ có mặt với chỉ số được chốt vào
+ * Snapshot qua từng kỳ — chỉ số nào chưa có lịch sử thì để trống chứ không bịa
+ * ra mức tăng.
+ */
+export function KpiCard({
+  label,
+  value,
+  sub,
+  delta,
+  higherIsBetter,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  delta?: { pct: number; prevLabel: string } | null;
+  higherIsBetter?: boolean;
+}) {
   return (
     <div
       style={{
@@ -124,18 +183,67 @@ export function KpiCard({ label, value, sub }: { label: string; value: string; s
       }}
     >
       <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 500 }}>{label}</div>
-      <div
-        style={{
-          fontSize: 27,
-          fontWeight: 700,
-          letterSpacing: "-.5px",
-          marginTop: 7,
-          ...tnum,
-        }}
-      >
-        {value}
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+        <div
+          style={{
+            fontSize: 27,
+            fontWeight: 700,
+            letterSpacing: "-.5px",
+            marginTop: 7,
+            ...tnum,
+          }}
+        >
+          {value}
+        </div>
+        {delta && (
+          <DeltaTag
+            pct={delta.pct}
+            higherIsBetter={higherIsBetter}
+            title={`So với kỳ báo cáo ${delta.prevLabel}`}
+          />
+        )}
       </div>
-      <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 4 }}>{sub}</div>
+      <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 4 }}>
+        {delta ? `so kỳ ${delta.prevLabel} · ${sub}` : sub}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Thanh phân bổ ngang: mỗi đoạn là một bậc, bề rộng theo tỉ trọng. Dùng cho
+ * "sức khỏe hệ thống page" — nhìn một phát ra ngay tỉ lệ page cần review so với
+ * page hiệu quả, thứ mà đọc 3 con số rời rạc không thấy được.
+ */
+export function StackBar({
+  parts,
+  height = 10,
+}: {
+  parts: { key: string; label: string; color: string; count: number }[];
+  height?: number;
+}) {
+  const total = parts.reduce((s, p) => s + p.count, 0);
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        height,
+        borderRadius: height / 2,
+        overflow: "hidden",
+        background: "var(--surface-2)",
+      }}
+    >
+      {total > 0 &&
+        parts
+          .filter((p) => p.count > 0)
+          .map((p) => (
+            <div
+              key={p.key}
+              title={`${p.label}: ${p.count} page (${Math.round((p.count / total) * 100)}%)`}
+              style={{ width: `${(p.count / total) * 100}%`, background: p.color }}
+            />
+          ))}
     </div>
   );
 }

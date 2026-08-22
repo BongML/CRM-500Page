@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { cardHint, cardTitle, screenPad } from "@/lib/ui";
-import type { BarMetric, Group, Niche, Page, Sub } from "@/lib/types";
+import type { BarMetric, Group, Niche, Owner, Page, Sub } from "@/lib/types";
 import type { Theme } from "@/lib/theme";
 import BarChart from "./charts/BarChart";
 import ClassifyLegend from "./ClassifyLegend";
@@ -21,6 +21,7 @@ export default function Catalog({
   groups,
   subs,
   pages,
+  owners,
   selected,
   theme,
   onToggleSelect,
@@ -33,6 +34,8 @@ export default function Catalog({
   groups: Group[];
   subs: Sub[];
   pages: Page[];
+  /** Chủ sở hữu dữ liệu — từ 2 người trở lên thì cây mọc thêm cấp người dùng. */
+  owners: Owner[];
   selected: Record<string, boolean>;
   theme: Theme;
   onToggleSelect: (id: string) => void;
@@ -157,7 +160,8 @@ export default function Catalog({
         >
           <div style={cardTitle}>Phân cấp nhóm page</div>
           <div style={cardHint}>
-            Nhóm 25 page → sub-group → page · kéo-thả page để chuyển sub-group
+            {owners.length > 1 ? "Người dùng → nhóm page → sub-group → page" : "Nhóm 25 page → sub-group → page"} ·
+            kéo-thả page để chuyển sub-group
           </div>
         </div>
 
@@ -170,6 +174,7 @@ export default function Catalog({
           subs={subs}
           pages={pages}
           niches={niches}
+          owners={owners}
           selected={selected}
           onToggleSelect={onToggleSelect}
           onSelectMany={onSelectMany}

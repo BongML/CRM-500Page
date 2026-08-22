@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/api";
-import { requireUser } from "@/lib/session";
+import { requireScope, scopeWhere } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 /** Đổi tên sub-group. Body: { name } */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const auth = await requireUser();
+  const auth = await requireScope();
   if (!auth.ok) return auth.response;
 
   const { id } = await ctx.params;
@@ -20,7 +20,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
   try {
     const done = await prisma.subGroup.updateMany({
-      where: { id, userId: auth.userId },
+      where: { id, ...scopeWhere(auth.scope) },
       data: { name: label },
     });
     if (!done.count) {
@@ -34,12 +34,18 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
 /** Xóa sub-group — chỉ khi rỗng. */
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const auth = await requireUser();
+  const auth = await requireScope();
   if (!auth.ok) return auth.response;
 
   const { id } = await ctx.params;
 
-  const pages = await prisma.page.count({ where: { subId: id, userId: auth.userId } });
+  const sub = await prisma.subGroup.findFirst({
+    where: { id, ...scopeWhere(auth.scope) },
+    select: { id: true },
+  });
+  if (!sub) return NextResponse.json({ error: "Sub-group không còn tồn tại." }, { status: 404 });
+
+  const pages = await prisma.page.count({ where: { subId: id } });
   if (pages > 0) {
     return NextResponse.json(
       { error: `Sub-group còn ${pages} page. Chuyển các page đi trước khi xóa.` },
@@ -48,7 +54,7 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   }
 
   try {
-    const done = await prisma.subGroup.deleteMany({ where: { id, userId: auth.userId } });
+    const done = await prisma.subGroup.deleteMany({ where: { id, ...scopeWhere(auth.scope) } });
     if (!done.count) {
       return NextResponse.json({ error: "Sub-group không còn tồn tại." }, { status: 404 });
     }

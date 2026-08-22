@@ -3,14 +3,28 @@
 import { useEffect, useRef } from "react";
 import Chart from "chart.js/auto";
 import { chartGrid, chartTick, themeColors, type Theme } from "@/lib/theme";
-import { int, vShort } from "@/lib/format";
+import { int, pct, vShort } from "@/lib/format";
 import type { SeriesPoint } from "@/lib/series";
 
 /**
- * Lượt xem theo mốc báo cáo — fill gradient accent. Mỗi điểm là một kỳ báo cáo
- * đã nhập, nên số điểm bằng số kỳ chứ không cố định.
+ * Một chỉ số theo mốc báo cáo — fill gradient accent. Mỗi điểm là một kỳ báo
+ * cáo đã nhập, nên số điểm bằng số kỳ chứ không cố định.
+ *
+ * `unit` quyết định cách đọc trục và tooltip: "count" rút gọn kiểu 233K / 6,2 tr,
+ * còn "pct" giữ nguyên con số kèm dấu %. Không rút gọn phần trăm — 4,1% mà hiện
+ * "4K" thì sai hoàn toàn.
  */
-export default function LineChart({ points, theme }: { points: SeriesPoint[]; theme: Theme }) {
+export default function LineChart({
+  points,
+  theme,
+  unit = "count",
+  suffix = "views",
+}: {
+  points: SeriesPoint[];
+  theme: Theme;
+  unit?: "count" | "pct";
+  suffix?: string;
+}) {
   const ref = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -49,7 +63,10 @@ export default function LineChart({ points, theme }: { points: SeriesPoint[]; th
           legend: { display: false },
           tooltip: {
             callbacks: {
-              label: (c) => int(Number(c.parsed.y)) + " views",
+              label: (c) =>
+                unit === "pct"
+                  ? pct(Number(c.parsed.y))
+                  : `${int(Number(c.parsed.y))} ${suffix}`,
             },
           },
         },
@@ -64,7 +81,7 @@ export default function LineChart({ points, theme }: { points: SeriesPoint[]; th
               color: chartTick(theme),
               font: { size: 10 },
               // Thang đo tự co theo độ lớn: "233K" hay "6,2 tr" tùy dữ liệu.
-              callback: (v) => vShort(Number(v)),
+              callback: (v) => (unit === "pct" ? String(v) : vShort(Number(v))),
             },
           },
         },
@@ -72,7 +89,7 @@ export default function LineChart({ points, theme }: { points: SeriesPoint[]; th
     });
 
     return () => chart.destroy();
-  }, [points, theme]);
+  }, [points, theme, unit, suffix]);
 
   return <canvas ref={ref} />;
 }

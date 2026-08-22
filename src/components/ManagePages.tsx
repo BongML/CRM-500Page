@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { btnGhost, btnMini, btnPrimary, cardHint, cardTitle, inputMini, select, tnum } from "@/lib/ui";
 import { int, tint } from "@/lib/format";
 import { followerRank, hotLevel } from "@/lib/rank";
-import type { Group, Niche, Page, Sub } from "@/lib/types";
+import type { Group, Niche, Owner, Page, Sub } from "@/lib/types";
 import { Avatar, HotMeter, RankBadge } from "./Atoms";
 import ClassifyLegend from "./ClassifyLegend";
 
@@ -24,17 +24,28 @@ export default function ManagePages({
   onBulk,
   onDeletePages,
   onDeletePage,
+  owners,
 }: {
   pages: Page[];
   niches: Niche[];
   groups: Group[];
   subs: Sub[];
+  /** Chỉ khác rỗng khi tài khoản tổng đang xem gộp nhiều tài khoản. */
+  owners: Owner[];
   onAssignNiche: (pageId: string, nicheId: string) => void;
   onMovePage: (pageId: string, groupId: string, subId: string) => void;
   onBulk: (ids: string[], change: { nicheId?: string; subId?: string }) => void;
   onDeletePages: (ids: string[]) => void;
   onDeletePage: (pageId: string) => void;
 }) {
+  /**
+   * Xem gộp nhiều tài khoản thì ngách/nhóm phải lọc theo đúng chủ của từng page:
+   * page của A không thể chuyển vào nhóm của B.
+   */
+  const multi = owners.length > 1;
+  const ownerName = (id?: string) => owners.find((o) => o.id === id)?.name ?? "";
+  const ownedBy = <T extends { userId?: string }>(list: T[], userId?: string) =>
+    multi ? list.filter((x) => x.userId === userId) : list;
   const [search, setSearch] = useState("");
   const [nicheFilter, setNicheFilter] = useState("all");
   const [groupFilter, setGroupFilter] = useState("all");
@@ -161,6 +172,7 @@ export default function ManagePages({
             {niches.map((n) => (
               <option key={n.id} value={n.id}>
                 {n.name}
+                {multi ? ` (${ownerName(n.userId)})` : ""}
               </option>
             ))}
           </select>
@@ -170,7 +182,7 @@ export default function ManagePages({
             {groups
               .filter((g) => subs.some((x) => x.groupId === g.id))
               .map((g) => (
-              <optgroup key={g.id} label={g.name}>
+              <optgroup key={g.id} label={multi ? `${g.name} (${ownerName(g.userId)})` : g.name}>
                 {subs
                   .filter((s) => s.groupId === g.id)
                   .map((s) => (
@@ -302,6 +314,11 @@ export default function ManagePages({
                   title={p.name}
                 >
                   {p.name}
+                  {multi && (
+                    <span style={{ marginLeft: 7, fontSize: 11, color: "var(--muted)" }}>
+                      · {ownerName(p.userId)}
+                    </span>
+                  )}
                 </span>
               </div>
 
@@ -320,7 +337,7 @@ export default function ManagePages({
                 }}
                 aria-label={`Ngách của ${p.name}`}
               >
-                {niches.map((n) => (
+                {ownedBy(niches, p.userId).map((n) => (
                   <option key={n.id} value={n.id}>
                     {n.name}
                   </option>
@@ -336,7 +353,7 @@ export default function ManagePages({
                 style={{ ...select, width: "100%" }}
                 aria-label={`Nhóm của ${p.name}`}
               >
-                {groups
+                {ownedBy(groups, p.userId)
                   .filter((g) => g.id === p.groupId || subs.some((x) => x.groupId === g.id))
                   .map((g) => (
                     <option key={g.id} value={g.id}>
