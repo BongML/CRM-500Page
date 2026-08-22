@@ -134,7 +134,7 @@ export default function PageDetail({
           gap: 16,
         }}
       >
-        <Avatar name={page.name} size={56} radius={12} fontSize={20} />
+        <Avatar name={page.name} src={page.image} size={56} radius={12} fontSize={20} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 18, fontWeight: 700 }}>{page.name}</div>
           <div

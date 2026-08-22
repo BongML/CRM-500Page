@@ -220,7 +220,7 @@ export default function NicheModal({
                     onChange={() => setPicked((s) => ({ ...s, [p.id]: !s[p.id] }))}
                     style={{ width: 15, height: 15, accentColor: "var(--accent)" }}
                   />
-                  <Avatar name={p.name} size={22} radius={5} fontSize={9} />
+                  <Avatar name={p.name} src={p.image} size={22} radius={5} fontSize={9} />
                   {p.name}
                   <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--faint)" }}>
                     {nicheById(niches, p.nicheId).name}

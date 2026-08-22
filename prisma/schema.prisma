@@ -112,6 +112,10 @@ model Page {
 
   network    String? // FACEBOOK / INSTAGRAM / …
   url        String? // Link trang thật (cột External Links)
+  /// Ảnh đại diện page (cột "Image Link" của báo cáo benchmark). URL fbcdn có
+  /// hạn dùng vài ngày nên UI phải chịu được ảnh chết — nhập lại báo cáo là có
+  /// link mới; trong lúc đó avatar tự quay về chữ cái đầu.
+  image      String?
   /// Mốc cuối kỳ của báo cáo benchmark đã dùng cho các số liệu trên.
   reportedAt DateTime?
   /// Tên file báo cáo benchmark gần nhất đã ghi đè số liệu.

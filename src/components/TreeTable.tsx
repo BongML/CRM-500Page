@@ -263,7 +263,7 @@ export default function TreeTable({
                                 }}
                               >
                                 <span style={{ color: "var(--faint)", fontSize: 12 }}>⋮⋮</span>
-                                <Avatar name={p.name} size={24} radius={6} fontSize={10} />
+                                <Avatar name={p.name} src={p.image} size={24} radius={6} fontSize={10} />
                                 <span
                                   style={{
                                     whiteSpace: "nowrap",

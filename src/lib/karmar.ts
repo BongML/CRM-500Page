@@ -17,6 +17,8 @@ export type MetricsRow = {
   name: string;
   network: string | null;
   url: string | null;
+  /** Ảnh đại diện page — cột "Image Link" của sheet Metrics Overview. */
+  image: string | null;
   follower: number;
   posts: number;
   likes: number;
@@ -172,6 +174,7 @@ function parseMetrics(sheet: Sheet): { rows: MetricsRow[]; period: Period } | nu
       name,
       network: opt(cell(r, header, "network")),
       url: opt(cell(r, header, "external links", "link")),
+      image: opt(cell(r, header, "image link", "image")),
       follower: Math.round(num(cell(r, header, "follower", "followers"))),
       posts: Math.round(num(cell(r, header, "number of posts"))),
       likes: Math.round(num(cell(r, header, "number of likes"))),

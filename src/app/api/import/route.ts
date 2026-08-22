@@ -213,6 +213,7 @@ async function writePages(
       reach: row.reach,
       network: row.network,
       url: row.url,
+      image: row.image,
       reportedAt: item.kept.reportedAt ? new Date(item.kept.reportedAt) : null,
       source: item.kept.file,
     };

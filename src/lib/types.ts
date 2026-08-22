@@ -34,6 +34,8 @@ export type Page = {
   reach: number;
   network: string | null;
   url: string | null;
+  /** Ảnh đại diện page từ báo cáo benchmark. Link fbcdn hết hạn sau vài ngày. */
+  image: string | null;
   /** Mốc cuối kỳ của báo cáo benchmark đang dùng (ISO). */
   reportedAt: string | null;
   source: string | null;

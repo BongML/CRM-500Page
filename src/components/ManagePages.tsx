@@ -290,7 +290,7 @@ export default function ManagePages({
               />
 
               <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
-                <Avatar name={p.name} size={26} radius={6} fontSize={10} />
+                <Avatar name={p.name} src={p.image} size={26} radius={6} fontSize={10} />
                 <span
                   style={{
                     fontSize: 13,

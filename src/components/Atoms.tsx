@@ -52,24 +52,52 @@ export function StatusBadge({ ppi }: { ppi: number }) {
 }
 
 /** Avatar page: nền HSL sinh từ tên + initials. */
+/**
+ * Ảnh đại diện page. Có `src` (cột "Image Link" của báo cáo) thì dùng ảnh thật;
+ * không có — hoặc ảnh chết — thì quay về chữ cái đầu trên nền màu.
+ *
+ * Bắt buộc phải có đường lùi: link fbcdn kèm chữ ký hết hạn sau vài ngày, nên
+ * sớm muộn gì ảnh cũng hỏng cho tới lần nhập báo cáo tiếp theo. Dùng thẻ <img>
+ * thay next/image vì host ảnh thay đổi liên tục, không khai báo trước được.
+ */
 export function Avatar({
   name,
+  src,
   size,
   radius,
   fontSize,
 }: {
   name: string;
+  src?: string | null;
   size: number;
   radius: number;
   fontSize: number;
 }) {
+  const [broken, setBroken] = useState(false);
+  const box: CSSProperties = {
+    width: size,
+    height: size,
+    flex: "none",
+    borderRadius: radius,
+  };
+
+  if (src && !broken) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt={name}
+        loading="lazy"
+        onError={() => setBroken(true)}
+        style={{ ...box, objectFit: "cover", background: "var(--surface-2)" }}
+      />
+    );
+  }
+
   return (
     <div
       style={{
-        width: size,
-        height: size,
-        flex: "none",
-        borderRadius: radius,
+        ...box,
         background: avatarBg(name),
         color: "#fff",
         display: "flex",
