@@ -34,12 +34,17 @@ export const runtime = "nodejs";
  * Body: multipart/form-data
  *   files[]  — 1..n file .xlsx
  *   nicheId  — ngách mặc định cho page mới ("" → tự tạo "Chưa phân loại")
- *   groupId  — nhóm đích cho page mới ("" → tự chia nhóm 25 page)
+ *   groupId  — nhóm đích cho page mới ("" → tự chia nhóm 25 page,
+ *              "none" → dồn hết vào một nhóm chờ, không chia)
  *   subId    — sub-group đích, đi kèm groupId
  *   dryRun   — "1" để chỉ soát trùng, không ghi gì xuống DB
  */
 
 const GROUP_CAP = 25;
+/** Giá trị groupId đặc biệt: không chia nhóm, dồn hết vào một nhóm chờ. */
+const NO_SPLIT = "none";
+/** Tên nhóm chờ khi chọn "không chia nhóm". */
+const HOLDING_GROUP = "Chưa phân nhóm";
 const MB = 1024 * 1024;
 
 /**
@@ -134,6 +139,46 @@ async function placer(
 
     bucket.count++;
     return { groupId: bucket.id, subId };
+  };
+}
+
+/**
+ * Chỗ xếp page khi người dùng chọn **không chia nhóm**: mọi page mới dồn vào một
+ * nhóm chờ duy nhất, không cắt theo 25 page.
+ *
+ * Dùng khi việc phân nhóm được quyết định ở nơi khác — file phân loại có cột
+ * "Nhóm" (xem /api/groups/arrange). Chia sẵn thành "Nhóm 01…NN" lúc nhập chỉ tạo
+ * ra một đống nhóm phải xóa lại ngay sau đó.
+ */
+async function holdingPlacer(userId: string, label: string) {
+  const existing = await prisma.group.findFirst({ where: { userId, name: HOLDING_GROUP } });
+
+  const group =
+    existing ??
+    (await prisma.group.create({
+      data: {
+        id: newId(),
+        name: HOLDING_GROUP,
+        order: ((await prisma.group.findFirst({ where: { userId }, orderBy: { order: "desc" } }))?.order ?? -1) + 1,
+        userId,
+      },
+    }));
+
+  // Sub-group chỉ tạo khi thật sự có page mới: báo cáo chỉ cập nhật số liệu page
+  // cũ thì không nên để lại một sub-group rỗng sau mỗi lần nhập.
+  let spot: { groupId: string; subId: string } | null = null;
+
+  return async function next() {
+    if (spot) return spot;
+
+    const subId = `${group.id}-${Date.now().toString(36)}`;
+    const order = await prisma.subGroup.count({ where: { groupId: group.id } });
+    await prisma.subGroup.create({
+      data: { id: subId, name: label, groupId: group.id, order, userId },
+    });
+
+    spot = { groupId: group.id, subId };
+    return spot;
   };
 }
 
@@ -257,10 +302,13 @@ async function writePages(
     }
   }
 
-  await runBatch(updates);
+  // Tạo trước, cập nhật sau — bắt buộc theo thứ tự này: hai dòng trùng tên chuẩn
+  // hóa trong cùng lô thì dòng sau sinh ra lệnh update trỏ vào page mà dòng trước
+  // mới chỉ xếp hàng chờ tạo. Chạy update trước thì Prisma báo P2025.
   for (const part of chunk(creates)) {
     await prisma.page.createMany({ data: part, skipDuplicates: true });
   }
+  await runBatch(updates);
 
   return out;
 }
@@ -534,8 +582,10 @@ export async function POST(req: Request) {
   const subId = String(form.get("subId") ?? "").trim();
   const dryRun = String(form.get("dryRun") ?? "") === "1";
 
+  const noSplit = groupId === NO_SPLIT;
+
   let fixed: { groupId: string; subId: string } | null = null;
-  if (groupId && subId) {
+  if (!noSplit && groupId && subId) {
     const sub = await prisma.subGroup.findFirst({ where: { id: subId, userId } });
     if (!sub || sub.groupId !== groupId) {
       return NextResponse.json({ error: "Nhóm/sub-group đích không hợp lệ." }, { status: 400 });
@@ -596,9 +646,12 @@ export async function POST(req: Request) {
 
   const defaultNiche = nicheResolver(userId, nicheId || null);
   const known = await loadKnownPages(userId);
+  const label = batchLabel(new Date());
   const place = dryRun
     ? async () => ({ groupId: "", subId: "" })
-    : await placer(userId, fixed, batchLabel(new Date()));
+    : noSplit
+      ? await holdingPlacer(userId, label)
+      : await placer(userId, fixed, label);
 
   const pageOut = await writePages(userId, pageDedupe.merged, known, place, defaultNiche, dryRun);
 

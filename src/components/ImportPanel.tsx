@@ -26,6 +26,9 @@ type Counts = {
 
 type Occurrence = { file: string; reportedAt: string | null };
 
+/** Giá trị "Nhóm đích" đặc biệt: dồn hết vào một nhóm chờ, không chia 25 page. */
+const NO_SPLIT = "none";
+
 /**
  * Gói file thành các lô sao cho mỗi lô không vượt trần dung lượng một lần gọi.
  * File vượt trần một mình vẫn nằm riêng một lô — nơi gọi phải chặn trước đó.
@@ -147,6 +150,8 @@ export default function ImportPanel({
   const picker = useRef<HTMLInputElement>(null);
 
   const groupSubs = subs.filter((s) => s.groupId === groupId);
+  /** Chọn một nhóm cụ thể mới cần chỉ định sub-group; "không chia nhóm" thì không. */
+  const needSub = !!groupId && groupId !== NO_SPLIT;
   const blocked = !!busy || files.length === 0 || (!!groupId && !subId);
 
   function addFiles(list: FileList | null) {
@@ -201,7 +206,9 @@ export default function ImportPanel({
         const body = new FormData();
         lots[i].forEach((f) => body.append("files", f));
         if (nicheId) body.append("nicheId", nicheId);
-        if (groupId && subId) {
+        if (groupId === NO_SPLIT) {
+          body.append("groupId", NO_SPLIT);
+        } else if (groupId && subId) {
           body.append("groupId", groupId);
           body.append("subId", subId);
         }
@@ -354,6 +361,7 @@ export default function ImportPanel({
               style={{ ...select, height: 38 }}
             >
               <option value="">Tự chia nhóm 25 page</option>
+              <option value={NO_SPLIT}>Không chia nhóm (dồn vào “Chưa phân nhóm”)</option>
               {groups.map((g) => (
                 <option key={g.id} value={g.id}>
                   {g.name}
@@ -362,7 +370,7 @@ export default function ImportPanel({
             </select>
           </div>
 
-          {groupId && (
+          {needSub && (
             <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 200, flex: 1 }}>
               <label style={label}>Sub-group đích</label>
               <select
