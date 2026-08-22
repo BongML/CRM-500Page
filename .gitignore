@@ -33,3 +33,6 @@ next-env.d.ts
 
 # Dữ liệu thật của người dùng (danh sách page, báo cáo Karmar) — không phải mã nguồn
 *.xlsx
+
+.vercel
+.env*
