@@ -72,3 +72,12 @@ export function rankMeta(rank: Rank): { color: string; label: string; min: numbe
 }
 
 export const RANK_LIST = RANKS;
+
+/**
+ * Số ngày của một kỳ báo cáo Fanpage Karma (4 tuần). Cột "Post/ngày" chia tổng
+ * số bài trong kỳ cho con số này, nên đổi kỳ báo cáo là phải đổi ở đây.
+ */
+export const REPORT_DAYS = 28;
+
+/** Số bài đăng trung bình mỗi ngày của một page (hoặc của cả tập page). */
+export const postsPerDay = (posts: number): number => posts / REPORT_DAYS;

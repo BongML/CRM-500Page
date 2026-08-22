@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { int, nicheById, pct, statusOf, statusStyle, vShort } from "@/lib/format";
+import { dec1, int, nicheById, pct, statusOf, statusStyle, vShort } from "@/lib/format";
 import { caret, treeCols, tnum } from "@/lib/ui";
-import { followerRank, hotLevel } from "@/lib/rank";
+import { followerRank, hotLevel, postsPerDay, REPORT_DAYS } from "@/lib/rank";
 import type { Group, Niche, Page, Sub } from "@/lib/types";
 import { Avatar, HotMeter, NicheTag, RankBadge, StatusBadge } from "./Atoms";
 
@@ -74,6 +74,12 @@ export default function TreeTable({
         <div title="Hạng quy mô theo số follower">Hạng</div>
         <div style={{ textAlign: "right" }}>Page</div>
         <div style={{ textAlign: "right" }}>Tổng views</div>
+        <div
+          style={{ textAlign: "right" }}
+          title={`Số bài đăng trung bình mỗi ngày: tổng bài trong kỳ chia ${REPORT_DAYS} ngày`}
+        >
+          Post/ngày
+        </div>
         <div style={{ textAlign: "right" }}>Tương tác</div>
         <div style={{ textAlign: "right" }}>Trạng thái</div>
       </div>
@@ -82,6 +88,7 @@ export default function TreeTable({
         const gpages = pages.filter((p) => p.groupId === g.id);
         const gviews = gpages.reduce((s, p) => s + p.views, 0);
         const gfollower = gpages.reduce((s, p) => s + p.follower, 0);
+        const gposts = gpages.reduce((s, p) => s + p.posts, 0);
         const grate = gpages.length ? gpages.reduce((s, p) => s + p.rate, 0) / gpages.length : 0;
         const gppi = gpages.length ? gpages.reduce((s, p) => s + p.ppi, 0) / gpages.length : 0;
 
@@ -132,6 +139,12 @@ export default function TreeTable({
               <div />
               <div style={{ textAlign: "right", ...tnum }}>{gpages.length}</div>
               <div style={{ textAlign: "right", ...tnum }}>{vShort(gviews)}</div>
+              <div
+                style={{ textAlign: "right", ...tnum }}
+                title={`${int(gposts)} bài / ${REPORT_DAYS} ngày`}
+              >
+                {dec1(postsPerDay(gposts))}
+              </div>
               <div style={{ textAlign: "right", ...tnum }}>{pct(+grate.toFixed(1))}</div>
               <div style={{ textAlign: "right" }}>
                 <span style={statusStyle(gppi)}>{statusOf(gppi).label}</span>
@@ -145,6 +158,7 @@ export default function TreeTable({
                   const spages = gpages.filter((p) => p.subId === s.id);
                   const sviews = spages.reduce((sum, p) => sum + p.views, 0);
                   const sfollower = spages.reduce((sum, p) => sum + p.follower, 0);
+                  const sposts = spages.reduce((sum, p) => sum + p.posts, 0);
                   const sOpen = !!subExpanded[s.id];
 
                   return (
@@ -195,6 +209,12 @@ export default function TreeTable({
                         </div>
                         <div style={{ textAlign: "right", color: "var(--muted)", ...tnum }}>
                           {vShort(sviews)}
+                        </div>
+                        <div
+                          style={{ textAlign: "right", color: "var(--muted)", ...tnum }}
+                          title={`${int(sposts)} bài / ${REPORT_DAYS} ngày`}
+                        >
+                          {dec1(postsPerDay(sposts))}
                         </div>
                         <div />
                         <div />
@@ -266,6 +286,12 @@ export default function TreeTable({
                               </div>
                               <div style={{ textAlign: "right", color: "var(--faint)" }}>—</div>
                               <div style={{ textAlign: "right", ...tnum }}>{vShort(p.views)}</div>
+                              <div
+                                style={{ textAlign: "right", ...tnum }}
+                                title={`${int(p.posts)} bài / ${REPORT_DAYS} ngày`}
+                              >
+                                {dec1(postsPerDay(p.posts))}
+                              </div>
                               <div style={{ textAlign: "right", ...tnum }}>{pct(p.rate)}</div>
                               <div style={{ textAlign: "right" }}>
                                 <StatusBadge ppi={p.ppi} />

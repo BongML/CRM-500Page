@@ -22,6 +22,7 @@ export default function ManagePages({
   onAssignNiche,
   onMovePage,
   onBulk,
+  onDeletePages,
   onDeletePage,
 }: {
   pages: Page[];
@@ -31,6 +32,7 @@ export default function ManagePages({
   onAssignNiche: (pageId: string, nicheId: string) => void;
   onMovePage: (pageId: string, groupId: string, subId: string) => void;
   onBulk: (ids: string[], change: { nicheId?: string; subId?: string }) => void;
+  onDeletePages: (ids: string[]) => void;
   onDeletePage: (pageId: string) => void;
 }) {
   const [search, setSearch] = useState("");
@@ -40,6 +42,8 @@ export default function ManagePages({
   const [bulkNiche, setBulkNiche] = useState("");
   const [bulkSub, setBulkSub] = useState("");
   const [hotFilter, setHotFilter] = useState("all");
+  /** Xóa hàng loạt không hoàn tác được — bấm lần đầu chỉ chuyển nút sang trạng thái hỏi lại. */
+  const [askDelete, setAskDelete] = useState(false);
 
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -64,6 +68,7 @@ export default function ManagePages({
 
     onBulk(ids, change);
     setPicked({});
+    setAskDelete(false);
     setBulkNiche("");
     setBulkSub("");
   }
@@ -184,7 +189,40 @@ export default function ManagePages({
           >
             Áp dụng
           </button>
-          <button onClick={() => setPicked({})} style={{ ...btnGhost, height: 32, fontSize: 12.5 }}>
+          <button
+            onClick={() => {
+              if (!askDelete) {
+                setAskDelete(true);
+                window.setTimeout(() => setAskDelete(false), 5000);
+                return;
+              }
+              onDeletePages(ids);
+              setPicked({});
+              setAskDelete(false);
+            }}
+            title="Xóa hẳn các page đã chọn khỏi hệ thống, kèm top content của chúng"
+            style={{
+              height: 32,
+              padding: "0 12px",
+              borderRadius: 8,
+              fontSize: 12.5,
+              fontWeight: 600,
+              cursor: "pointer",
+              border: `1px solid ${askDelete ? "var(--danger)" : "var(--border-strong)"}`,
+              background: askDelete ? "var(--danger)" : "transparent",
+              color: askDelete ? "#fff" : "var(--danger)",
+            }}
+          >
+            {askDelete ? `Bấm lần nữa để xóa ${ids.length} page` : `Xóa ${ids.length} page`}
+          </button>
+
+          <button
+            onClick={() => {
+              setPicked({});
+              setAskDelete(false);
+            }}
+            style={{ ...btnGhost, height: 32, fontSize: 12.5 }}
+          >
             Bỏ chọn
           </button>
         </div>

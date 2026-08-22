@@ -62,3 +62,39 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ updated: res.count });
 }
+
+/**
+ * Xóa hẳn nhiều page khỏi hệ thống. Body: { ids: string[] }
+ *
+ * Xóa kèm luôn top content của chính các page đó: giữ lại thì bài viết thành mồ
+ * côi (pageId null) và vẫn nằm trong số liệu của ngách dù page đã biến mất.
+ * Không đụng tới nhóm/sub-group — nhóm rỗng vẫn giữ nguyên để xếp lại sau.
+ */
+export async function DELETE(req: Request) {
+  const auth = await requireUser();
+  if (!auth.ok) return auth.response;
+  const { userId } = auth;
+
+  const { ids } = (await req.json().catch(() => ({}))) as { ids?: string[] };
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return NextResponse.json({ error: "Chưa chọn page nào." }, { status: 400 });
+  }
+
+  // Lọc qua userId trước: chỉ xóa page của chính tài khoản đang đăng nhập.
+  const mine = await prisma.page.findMany({
+    where: { id: { in: ids }, userId },
+    select: { id: true, nicheId: true },
+  });
+  if (!mine.length) {
+    return NextResponse.json({ error: "Không tìm thấy page nào để xóa." }, { status: 404 });
+  }
+
+  const pageIds = mine.map((p) => p.id);
+  const posts = await prisma.topPost.deleteMany({ where: { userId, pageId: { in: pageIds } } });
+  const deleted = await prisma.page.deleteMany({ where: { id: { in: pageIds }, userId } });
+
+  // Ngách của các page vừa xóa phải tính lại, nếu không dashboard treo số cũ.
+  await refreshNiches(mine.map((p) => p.nicheId));
+
+  return NextResponse.json({ deleted: deleted.count, posts: posts.count });
+}

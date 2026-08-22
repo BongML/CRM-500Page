@@ -13,6 +13,11 @@ export function int(n: number): string {
   return n.toLocaleString("vi-VN");
 }
 
+/** Số lẻ 1 chữ số kiểu VN: 2.357 → "2,4". */
+export function dec1(n: number): string {
+  return n.toFixed(1).replace(".", ",");
+}
+
 /** Phần trăm với dấu phẩy: "4,9%". */
 export function pct(n: number): string {
   return String(n).replace(".", ",") + "%";

@@ -36,6 +36,7 @@ export default function Manage({
   onMovePage,
   onBulk,
   onDeletePage,
+  onDeletePages,
   onCreateGroup,
   onRenameGroup,
   onDeleteGroup,
@@ -56,6 +57,7 @@ export default function Manage({
   onMovePage: (pageId: string, groupId: string, subId: string) => void;
   onBulk: (ids: string[], change: { nicheId?: string; subId?: string }) => void;
   onDeletePage: (pageId: string) => void;
+  onDeletePages: (ids: string[]) => void;
   onCreateGroup: (name: string) => void;
   onRenameGroup: (id: string, name: string) => void;
   onDeleteGroup: (id: string) => void;
@@ -118,6 +120,7 @@ export default function Manage({
           onAssignNiche={onAssignNiche}
           onMovePage={onMovePage}
           onBulk={onBulk}
+          onDeletePages={onDeletePages}
           onDeletePage={(id) => {
             // Xóa page là thao tác không hoàn tác — bấm lần 2 để xác nhận.
             if (confirm === id) {

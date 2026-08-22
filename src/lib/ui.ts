@@ -13,7 +13,7 @@ export const screenPad: CSSProperties = { padding: "22px 26px 40px" };
 
 /** Grid cột cố định của bảng cây phân cấp. */
 export const treeCols =
-  "34px minmax(210px,2fr) 140px 78px 92px 44px 74px 108px 104px 116px";
+  "34px minmax(200px,2fr) 132px 74px 88px 42px 66px 100px 84px 96px 108px";
 
 export const tnum: CSSProperties = { fontVariantNumeric: "tabular-nums" };
 

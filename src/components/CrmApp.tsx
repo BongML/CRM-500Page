@@ -174,10 +174,35 @@ export default function CrmApp({ initial }: { initial: Bootstrap }) {
   const deletePage = useCallback(
     (pageId: string) => {
       setPages((prev) => prev.filter((p) => p.id !== pageId));
+      // Bài của page cũng bị xóa ở server — bỏ khỏi state để UI không trỏ vào khoảng không.
+      setTopPosts((prev) => prev.filter((t) => t.pageId !== pageId));
+      setSelectedPageId((cur) => (cur === pageId ? null : cur));
       api(`/api/pages/${pageId}`, "DELETE").catch((e) => {
         fail(e);
         refresh().catch(() => undefined);
       });
+    },
+    [fail, refresh],
+  );
+
+  /** Xóa hẳn nhiều page đã tick. Không hoàn tác được — UI phải hỏi lại trước khi gọi. */
+  const deletePages = useCallback(
+    (ids: string[]) => {
+      if (!ids.length) return;
+      const gone = new Set(ids);
+
+      setPages((prev) => prev.filter((p) => !gone.has(p.id)));
+      setTopPosts((prev) => prev.filter((t) => !t.pageId || !gone.has(t.pageId)));
+      setSelected({});
+      setSelectedPageId((cur) => (cur && gone.has(cur) ? null : cur));
+
+      api("/api/pages/bulk", "DELETE", { ids })
+        // Số tổng hợp của ngách được tính lại ở server, nên phải nạp lại mới khớp.
+        .then(() => refresh())
+        .catch((e) => {
+          fail(e);
+          refresh().catch(() => undefined);
+        });
     },
     [fail, refresh],
   );
@@ -424,6 +449,7 @@ export default function CrmApp({ initial }: { initial: Bootstrap }) {
             onMovePage={movePage}
             onBulk={bulkChange}
             onDeletePage={deletePage}
+          onDeletePages={deletePages}
             onCreateGroup={createGroup}
             onRenameGroup={renameGroup}
             onDeleteGroup={deleteGroup}
@@ -457,6 +483,7 @@ export default function CrmApp({ initial }: { initial: Bootstrap }) {
           count={selectedIds.length}
           niches={niches}
           onAssign={bulkAssign}
+          onDelete={() => deletePages(selectedIds)}
           onClear={() => setSelected({})}
         />
       )}

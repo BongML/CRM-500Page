@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { Niche } from "@/lib/types";
 import { NicheDot } from "./Atoms";
 
@@ -8,13 +9,18 @@ export default function BulkBar({
   count,
   niches,
   onAssign,
+  onDelete,
   onClear,
 }: {
   count: number;
   niches: Niche[];
   onAssign: (nicheId: string) => void;
+  onDelete: () => void;
   onClear: () => void;
 }) {
+  /** Xóa không hoàn tác được — lần bấm đầu chỉ đổi nút sang trạng thái hỏi lại. */
+  const [ask, setAsk] = useState(false);
+
   return (
     <div
       className="crm-pop-fast"
@@ -60,7 +66,36 @@ export default function BulkBar({
         ))}
       </div>
       <button
-        onClick={onClear}
+        onClick={() => {
+          if (!ask) {
+            setAsk(true);
+            window.setTimeout(() => setAsk(false), 5000);
+            return;
+          }
+          setAsk(false);
+          onDelete();
+        }}
+        title="Xóa hẳn các page đã chọn khỏi hệ thống, kèm top content của chúng"
+        style={{
+          border: `1px solid ${ask ? "transparent" : "rgba(255,255,255,.2)"}`,
+          borderRadius: 7,
+          background: ask ? "var(--danger)" : "transparent",
+          color: ask ? "#fff" : "inherit",
+          cursor: "pointer",
+          fontSize: 12,
+          fontWeight: ask ? 600 : 400,
+          padding: "6px 10px",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {ask ? `Bấm lần nữa để xóa ${count} page` : "Xóa"}
+      </button>
+
+      <button
+        onClick={() => {
+          setAsk(false);
+          onClear();
+        }}
         style={{
           border: "none",
           background: "transparent",

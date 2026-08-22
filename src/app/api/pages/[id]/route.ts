@@ -56,7 +56,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   }
 }
 
-/** Xóa 1 page khỏi hệ thống. */
+/** Xóa 1 page khỏi hệ thống, kèm top content của chính page đó. */
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const auth = await requireUser();
   if (!auth.ok) return auth.response;
@@ -69,6 +69,8 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
     });
     if (!page) return NextResponse.json({ error: "Page không còn tồn tại." }, { status: 404 });
 
+    // Xóa bài của page trước: giữ lại thì chúng thành mồ côi mà vẫn tính vào ngách.
+    await prisma.topPost.deleteMany({ where: { userId: auth.userId, pageId: id } });
     await prisma.page.deleteMany({ where: { id, userId: auth.userId } });
     await refreshNiches([page.nicheId]);
     return NextResponse.json({ ok: true });
