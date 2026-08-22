@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
 /**
  * Chạy `prisma migrate deploy` lúc build, nhưng tự dò biến môi trường trước.
@@ -74,10 +75,27 @@ if (!direct) {
 process.env.DATABASE_URL = pooled;
 process.env.DIRECT_URL = direct;
 
-const res = spawnSync("npx", ["prisma", "migrate", "deploy"], {
-  stdio: "inherit",
-  env: process.env,
-  shell: process.platform === "win32",
-});
+// Gọi thẳng binary trong node_modules thay vì qua npx: trong container build
+// của Vercel, npx có thể phải đi tải lại package hoặc không nằm sẵn trong PATH
+// của tiến trình con.
+const local = join(
+  "node_modules",
+  ".bin",
+  process.platform === "win32" ? "prisma.cmd" : "prisma",
+);
+const useLocal = existsSync(local);
+
+const res = spawnSync(
+  useLocal ? local : "npx",
+  useLocal ? ["migrate", "deploy"] : ["prisma", "migrate", "deploy"],
+  { stdio: "inherit", env: process.env, shell: process.platform === "win32" },
+);
+
+if (res.error) {
+  console.error(`
+[migrate] Không chạy được prisma: ${res.error.message}
+`);
+  process.exit(1);
+}
 
 process.exit(res.status ?? 1);
