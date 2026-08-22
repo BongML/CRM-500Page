@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { btnGhost, btnPrimary, cardHint, cardTitle, label, select } from "@/lib/ui";
 import TemplateLinks from "./TemplateLinks";
 import type { Group, Niche, Sub } from "@/lib/types";
@@ -25,6 +25,51 @@ type Counts = {
 };
 
 type Occurrence = { file: string; reportedAt: string | null };
+
+/**
+ * Gói file thành các lô sao cho mỗi lô không vượt trần dung lượng một lần gọi.
+ * File vượt trần một mình vẫn nằm riêng một lô — nơi gọi phải chặn trước đó.
+ */
+function batchFiles(files: File[], maxTotal: number): File[][] {
+  const lots: File[][] = [];
+  let cur: File[] = [];
+  let size = 0;
+
+  for (const f of files) {
+    if (cur.length && size + f.size > maxTotal) {
+      lots.push(cur);
+      cur = [];
+      size = 0;
+    }
+    cur.push(f);
+    size += f.size;
+  }
+  if (cur.length) lots.push(cur);
+  return lots;
+}
+
+const addCounts = <T extends Record<string, number>>(a: T, b: T): T => {
+  const out = { ...a };
+  for (const key of Object.keys(a) as (keyof T)[]) {
+    out[key] = ((a[key] ?? 0) + (b[key] ?? 0)) as T[keyof T];
+  }
+  return out;
+};
+
+/** Gộp kết quả của nhiều lô thành một bảng tổng để hiển thị như một lần nhập. */
+function mergeResults(a: ImportResult, b: ImportResult): ImportResult {
+  return {
+    dryRun: a.dryRun,
+    files: [...a.files, ...b.files],
+    pages: addCounts(a.pages, b.pages),
+    posts: addCounts(a.posts, b.posts),
+    trends: a.trends + b.trends,
+    duplicateSample: [...a.duplicateSample, ...b.duplicateSample],
+    duplicateTotal: a.duplicateTotal + b.duplicateTotal,
+    nameClashes: [...a.nameClashes, ...b.nameClashes],
+    failed: a.failed + b.failed,
+  };
+}
 
 type ImportResult = {
   dryRun: boolean;
@@ -89,6 +134,10 @@ export default function ImportPanel({
 }) {
   const [files, setFiles] = useState<File[]>([]);
   const [nicheId, setNicheId] = useState("");
+  /** Trần dung lượng do server công bố; chưa hỏi được thì tạm coi là 4MB cho an toàn. */
+  const [limit, setLimit] = useState({ maxFileBytes: 4 * 1024 * 1024, maxTotalBytes: 4 * 1024 * 1024, limitMb: 4 });
+  /** Tiến độ khi phải chia nhiều lô: "đang gửi lô 2/3". */
+  const [batch, setBatch] = useState<{ at: number; total: number } | null>(null);
   const [groupId, setGroupId] = useState("");
   const [subId, setSubId] = useState("");
   const [dragging, setDragging] = useState(false);
@@ -115,26 +164,58 @@ export default function ImportPanel({
     });
   }
 
+  useEffect(() => {
+    fetch("/api/import")
+      .then((r) => r.json())
+      .then((l: { maxFileBytes?: number; maxTotalBytes?: number; limitMb?: number }) => {
+        if (l.maxFileBytes && l.maxTotalBytes && l.limitMb) {
+          setLimit({ maxFileBytes: l.maxFileBytes, maxTotalBytes: l.maxTotalBytes, limitMb: l.limitMb });
+        }
+      })
+      .catch(() => undefined);
+  }, []);
+
   async function submit(dryRun: boolean) {
     if (blocked) return;
     setBusy(dryRun ? "check" : "import");
     setError(null);
 
     try {
-      const body = new FormData();
-      files.forEach((f) => body.append("files", f));
-      if (nicheId) body.append("nicheId", nicheId);
-      if (groupId && subId) {
-        body.append("groupId", groupId);
-        body.append("subId", subId);
+      const tooBig = files.filter((f) => f.size > limit.maxFileBytes);
+      if (tooBig.length) {
+        throw new Error(
+          `Vượt trần ${limit.limitMb}MB mỗi file: ${tooBig
+            .map((f) => decodeURIComponent(f.name))
+            .join(", ")}`,
+        );
       }
-      if (dryRun) body.append("dryRun", "1");
 
-      const res = await fetch("/api/import", { method: "POST", body });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error ?? "Nhập dữ liệu thất bại.");
+      // Gói file thành các lô vừa trần dung lượng rồi gửi lần lượt. Trong cùng
+      // một lô, server vẫn lọc trùng chéo giữa các file như trước.
+      const lots = batchFiles(files, limit.maxTotalBytes);
+      let merged: ImportResult | null = null;
 
-      setResult(json as ImportResult);
+      for (let i = 0; i < lots.length; i++) {
+        setBatch(lots.length > 1 ? { at: i + 1, total: lots.length } : null);
+
+        const body = new FormData();
+        lots[i].forEach((f) => body.append("files", f));
+        if (nicheId) body.append("nicheId", nicheId);
+        if (groupId && subId) {
+          body.append("groupId", groupId);
+          body.append("subId", subId);
+        }
+        if (dryRun) body.append("dryRun", "1");
+
+        const res = await fetch("/api/import", { method: "POST", body });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.error ?? "Nhập dữ liệu thất bại.");
+
+        merged = merged ? mergeResults(merged, json as ImportResult) : (json as ImportResult);
+      }
+
+      if (!merged) throw new Error("Chưa chọn file nào.");
+      setResult(merged);
       // Chỉ soát trùng thì giữ nguyên danh sách file để bấm nhập ngay sau đó.
       if (!dryRun) {
         setFiles([]);
@@ -144,6 +225,7 @@ export default function ImportPanel({
       setError(e instanceof Error ? e.message : "Nhập dữ liệu thất bại.");
     } finally {
       setBusy("");
+      setBatch(null);
     }
   }
 
@@ -319,14 +401,24 @@ export default function ImportPanel({
             disabled={blocked}
             style={{ ...btnPrimary, opacity: blocked ? 0.55 : 1 }}
           >
-            {busy === "import" ? "Đang nhập…" : files.length ? `Nhập ${files.length} file` : "Nhập dữ liệu"}
+            {busy === "import"
+              ? batch
+                ? `Đang nhập… lô ${batch.at}/${batch.total}`
+                : "Đang nhập…"
+              : files.length
+                ? `Nhập ${files.length} file`
+                : "Nhập dữ liệu"}
           </button>
           <button
             onClick={() => submit(true)}
             disabled={blocked}
             style={{ ...btnGhost, opacity: blocked ? 0.55 : 1 }}
           >
-            {busy === "check" ? "Đang soát…" : "Kiểm tra trùng"}
+            {busy === "check"
+              ? batch
+                ? `Đang soát… lô ${batch.at}/${batch.total}`
+                : "Đang soát…"
+              : "Kiểm tra trùng"}
           </button>
           {files.length > 0 && !busy && (
             <button onClick={() => setFiles([])} style={btnGhost}>

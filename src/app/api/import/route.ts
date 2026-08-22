@@ -40,14 +40,24 @@ export const runtime = "nodejs";
  */
 
 const GROUP_CAP = 25;
+const MB = 1024 * 1024;
+
 /**
- * Trần dung lượng đặt theo giới hạn của nền tảng, không phải theo khả năng đọc:
- * hàm serverless của Vercel chặn body request quá ~4.5MB **trước khi** code chạy,
- * nên tự chặn sớm để báo lỗi tiếng Việt thay vì để người dùng nhận 413 trống.
+ * Trần dung lượng mỗi lần gọi. Đây là giới hạn của **nền tảng**, không phải của
+ * bộ đọc: hàm serverless trên Vercel chặn body request quá ~4.5MB trước khi code
+ * kịp chạy, nên ở đó phải tự chặn sớm để báo lỗi tiếng Việt thay vì 413 trống.
+ * Chạy ở máy nhà hoặc server thường thì không có giới hạn đó, và báo cáo Karmar
+ * thật nặng 3–6MB mỗi file nên trần 4MB sẽ làm tính năng vô dụng.
+ *
+ * Đặt CRM_MAX_UPLOAD_MB để chỉnh tay (ví dụ khi dùng nền tảng khác).
  */
-const MAX_FILE_BYTES = 4 * 1024 * 1024;
-/** Tổng dung lượng cả lô — giới hạn của Vercel tính trên toàn body. */
-const MAX_TOTAL_BYTES = 4 * 1024 * 1024;
+const CONFIGURED_MB = Number(process.env.CRM_MAX_UPLOAD_MB);
+const LIMIT_MB =
+  Number.isFinite(CONFIGURED_MB) && CONFIGURED_MB > 0 ? CONFIGURED_MB : process.env.VERCEL ? 4 : 25;
+
+const MAX_FILE_BYTES = LIMIT_MB * MB;
+/** Tổng dung lượng một lần gọi — client tự chia lô theo con số này (xem GET bên dưới). */
+const MAX_TOTAL_BYTES = LIMIT_MB * MB;
 const MAX_FILES = 20;
 /** Số dòng trùng gửi kèm về client để hiển thị chi tiết. */
 const DUPLICATE_SAMPLE = 60;
@@ -477,6 +487,19 @@ async function writeSnapshot(userId: string, takenAt: Date) {
   }
 }
 
+/**
+ * Trần dung lượng hiện hành, để giao diện tự chia file thành các lô vừa đủ thay
+ * vì chặn người dùng bằng thông báo lỗi.
+ */
+export async function GET() {
+  return NextResponse.json({
+    maxFileBytes: MAX_FILE_BYTES,
+    maxTotalBytes: MAX_TOTAL_BYTES,
+    maxFiles: MAX_FILES,
+    limitMb: LIMIT_MB,
+  });
+}
+
 export async function POST(req: Request) {
   const auth = await requireUser("Cần đăng nhập để nhập dữ liệu.");
   if (!auth.ok) return auth.response;
@@ -501,7 +524,7 @@ export async function POST(req: Request) {
   if (total > MAX_TOTAL_BYTES) {
     const mb = (total / 1024 / 1024).toFixed(1);
     return NextResponse.json(
-      { error: `Tổng dung lượng ${mb}MB vượt mức ${MAX_TOTAL_BYTES / 1024 / 1024}MB mỗi lần nhập — chia thành nhiều lô nhỏ.` },
+      { error: `Tổng dung lượng ${mb}MB vượt mức ${LIMIT_MB}MB mỗi lần gọi — chia thành nhiều lô nhỏ.` },
       { status: 413 },
     );
   }
@@ -539,7 +562,7 @@ export async function POST(req: Request) {
     };
 
     try {
-      if (file.size > MAX_FILE_BYTES) throw new Error(`File lớn hơn ${MAX_FILE_BYTES / 1024 / 1024}MB.`);
+      if (file.size > MAX_FILE_BYTES) throw new Error(`File lớn hơn ${LIMIT_MB}MB.`);
       if (!/\.xlsx$/i.test(file.name)) throw new Error("Chỉ nhận file .xlsx.");
 
       const report = parseReport(Buffer.from(await file.arrayBuffer()));

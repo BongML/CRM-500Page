@@ -40,6 +40,7 @@ export default function Manage({
   onCreateGroup,
   onRenameGroup,
   onDeleteGroup,
+  onDeleteGroups,
   onCreateSub,
   onRenameSub,
   onDeleteSub,
@@ -61,6 +62,7 @@ export default function Manage({
   onCreateGroup: (name: string) => void;
   onRenameGroup: (id: string, name: string) => void;
   onDeleteGroup: (id: string) => void;
+  onDeleteGroups: (ids: string[], withPages: boolean) => void;
   onCreateSub: (groupId: string, name: string) => void;
   onRenameSub: (id: string, name: string) => void;
   onDeleteSub: (id: string) => void;
@@ -157,6 +159,7 @@ export default function Manage({
           onCreateGroup={onCreateGroup}
           onRenameGroup={onRenameGroup}
           onDeleteGroup={onDeleteGroup}
+          onDeleteGroups={onDeleteGroups}
           onCreateSub={onCreateSub}
           onRenameSub={onRenameSub}
           onDeleteSub={onDeleteSub}

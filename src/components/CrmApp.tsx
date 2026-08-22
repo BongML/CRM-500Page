@@ -207,6 +207,25 @@ export default function CrmApp({ initial }: { initial: Bootstrap }) {
     [fail, refresh],
   );
 
+  /**
+   * Xóa nhiều nhóm cùng lúc. `withPages` bật thì page bên trong bị xóa theo —
+   * server từ chối (409) nếu nhóm còn page mà chưa bật cờ này, nên giao diện luôn
+   * có cơ hội hỏi lại bằng con số cụ thể.
+   */
+  const deleteGroups = useCallback(
+    async (ids: string[], withPages: boolean) => {
+      if (!ids.length) return;
+      try {
+        await api("/api/groups/bulk", "DELETE", { ids, withPages });
+        await refresh();
+      } catch (e) {
+        fail(e);
+        refresh().catch(() => undefined);
+      }
+    },
+    [fail, refresh],
+  );
+
   // ---- CRUD nhóm / sub-group / ngách (ghi server xong mới đồng bộ lại state) ----
 
   const createGroup = useCallback(
@@ -453,6 +472,7 @@ export default function CrmApp({ initial }: { initial: Bootstrap }) {
             onCreateGroup={createGroup}
             onRenameGroup={renameGroup}
             onDeleteGroup={deleteGroup}
+          onDeleteGroups={deleteGroups}
             onCreateSub={createSub}
             onRenameSub={renameSub}
             onDeleteSub={deleteSub}

@@ -54,6 +54,7 @@ export default function ManageGroups({
   onCreateGroup,
   onRenameGroup,
   onDeleteGroup,
+  onDeleteGroups,
   onCreateSub,
   onRenameSub,
   onDeleteSub,
@@ -64,14 +65,23 @@ export default function ManageGroups({
   onCreateGroup: (name: string) => void;
   onRenameGroup: (id: string, name: string) => void;
   onDeleteGroup: (id: string) => void;
+  onDeleteGroups: (ids: string[], withPages: boolean) => void;
   onCreateSub: (groupId: string, name: string) => void;
   onRenameSub: (id: string, name: string) => void;
   onDeleteSub: (id: string) => void;
 }) {
   const [newGroup, setNewGroup] = useState("");
   const [editing, setEditing] = useState<Editing>(null);
+  const [picked, setPicked] = useState<Record<string, boolean>>({});
+  /** Xóa nhóm kèm page không hoàn tác được — lần bấm đầu chỉ chuyển sang hỏi lại. */
+  const [ask, setAsk] = useState(false);
 
   const pagesInGroup = (id: string) => pages.filter((p) => p.groupId === id).length;
+
+  const pickedIds = groups.filter((g) => picked[g.id]).map((g) => g.id);
+  const allPicked = groups.length > 0 && pickedIds.length === groups.length;
+  /** Số page sẽ mất theo nếu xóa đúng các nhóm đang tick. */
+  const pagesAtRisk = pages.filter((p) => picked[p.groupId]).length;
   const pagesInSub = (id: string) => pages.filter((p) => p.subId === id).length;
 
   function commit() {
@@ -98,8 +108,85 @@ export default function ManageGroups({
     >
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
         <div style={cardTitle}>Nhóm page & sub-group</div>
-        <div style={cardHint}>Mỗi nhóm tối đa {GROUP_CAP} page · chỉ xóa được nhóm rỗng</div>
+        <div style={cardHint}>
+          Mỗi nhóm tối đa {GROUP_CAP} page · tick để xóa nhiều nhóm cùng lúc
+        </div>
       </div>
+
+      {groups.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <label
+            style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, cursor: "pointer" }}
+          >
+            <input
+              type="checkbox"
+              checked={allPicked}
+              onChange={() => {
+                setAsk(false);
+                setPicked(allPicked ? {} : Object.fromEntries(groups.map((g) => [g.id, true])));
+              }}
+              style={{ width: 15, height: 15, accentColor: "var(--accent)", cursor: "pointer" }}
+            />
+            Chọn tất cả {groups.length} nhóm
+          </label>
+
+          {pickedIds.length > 0 && (
+            <>
+              <span style={{ fontSize: 12.5, color: "var(--muted)" }}>
+                {pickedIds.length} nhóm đã chọn
+                {pagesAtRisk > 0 ? ` · chứa ${pagesAtRisk} page` : " · đều rỗng"}
+              </span>
+
+              <button
+                onClick={() => {
+                  if (!ask) {
+                    setAsk(true);
+                    window.setTimeout(() => setAsk(false), 6000);
+                    return;
+                  }
+                  onDeleteGroups(pickedIds, pagesAtRisk > 0);
+                  setPicked({});
+                  setAsk(false);
+                }}
+                title={
+                  pagesAtRisk > 0
+                    ? "Xóa các nhóm đã chọn cùng toàn bộ page bên trong"
+                    : "Xóa các nhóm rỗng đã chọn"
+                }
+                style={{
+                  height: 32,
+                  padding: "0 12px",
+                  borderRadius: 8,
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  border: `1px solid ${ask ? "var(--danger)" : "var(--border-strong)"}`,
+                  background: ask ? "var(--danger)" : "transparent",
+                  color: ask ? "#fff" : "var(--danger)",
+                }}
+              >
+                {ask
+                  ? pagesAtRisk > 0
+                    ? `Bấm lần nữa: xóa ${pickedIds.length} nhóm và ${pagesAtRisk} page`
+                    : `Bấm lần nữa để xóa ${pickedIds.length} nhóm`
+                  : pagesAtRisk > 0
+                    ? `Xóa ${pickedIds.length} nhóm + ${pagesAtRisk} page`
+                    : `Xóa ${pickedIds.length} nhóm`}
+              </button>
+
+              <button
+                onClick={() => {
+                  setPicked({});
+                  setAsk(false);
+                }}
+                style={{ ...btnGhost, height: 32, fontSize: 12.5 }}
+              >
+                Bỏ chọn
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 10 }}>
         <input
@@ -140,6 +227,16 @@ export default function ManageGroups({
                   borderBottom: "1px solid var(--border)",
                 }}
               >
+                <input
+                  type="checkbox"
+                  checked={!!picked[g.id]}
+                  onChange={() => {
+                    setAsk(false);
+                    setPicked((prev) => ({ ...prev, [g.id]: !prev[g.id] }));
+                  }}
+                  aria-label={`Chọn ${g.name}`}
+                  style={{ width: 15, height: 15, accentColor: "var(--accent)", cursor: "pointer" }}
+                />
                 <NameCell
                   id={g.id}
                   kind="group"
