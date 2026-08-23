@@ -7,6 +7,7 @@ import { followerRank, hotLevel } from "@/lib/rank";
 import type { Group, Niche, Owner, Page, Sub } from "@/lib/types";
 import { Avatar, HotMeter, RankBadge } from "./Atoms";
 import ClassifyLegend from "./ClassifyLegend";
+import MoveConfirm, { type MoveAsk } from "./MoveConfirm";
 
 const COLS = "34px minmax(180px,2.2fr) 84px 46px 140px 140px 150px 92px 66px";
 
@@ -55,6 +56,32 @@ export default function ManagePages({
   const [hotFilter, setHotFilter] = useState("all");
   /** Xóa hàng loạt không hoàn tác được — bấm lần đầu chỉ chuyển nút sang trạng thái hỏi lại. */
   const [askDelete, setAskDelete] = useState(false);
+  /** Chuyển nhóm/sub phải qua modal xác nhận, dropdown chỉ đề xuất chứ chưa ghi. */
+  const [moveAsk, setMoveAsk] = useState<MoveAsk | null>(null);
+
+  const groupName = (id: string) => groups.find((g) => g.id === id)?.name ?? "—";
+  const subName = (id: string) => subs.find((s) => s.id === id)?.name ?? "—";
+
+  /** Dựng yêu cầu chờ xác nhận; bỏ qua nếu chọn lại đúng chỗ page đang nằm. */
+  function askMove(page: Page, kind: "group" | "sub", groupId: string, subId: string) {
+    if (page.groupId === groupId && page.subId === subId) return;
+    setMoveAsk({
+      page,
+      kind,
+      groupId,
+      subId,
+      fromGroup: groupName(page.groupId),
+      fromSub: subName(page.subId),
+      toGroup: groupName(groupId),
+      toSub: subName(subId),
+    });
+  }
+
+  function confirmMove() {
+    if (!moveAsk) return;
+    onMovePage(moveAsk.page.id, moveAsk.groupId, moveAsk.subId);
+    setMoveAsk(null);
+  }
 
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -348,7 +375,7 @@ export default function ManagePages({
                 value={p.groupId}
                 onChange={(e) => {
                   const first = subs.find((s) => s.groupId === e.target.value);
-                  if (first) onMovePage(p.id, first.groupId, first.id);
+                  if (first) askMove(p, "group", first.groupId, first.id);
                 }}
                 style={{ ...select, width: "100%" }}
                 aria-label={`Nhóm của ${p.name}`}
@@ -364,7 +391,7 @@ export default function ManagePages({
 
               <select
                 value={p.subId}
-                onChange={(e) => onMovePage(p.id, p.groupId, e.target.value)}
+                onChange={(e) => askMove(p, "sub", p.groupId, e.target.value)}
                 style={{ ...select, width: "100%" }}
                 aria-label={`Sub-group của ${p.name}`}
               >
@@ -397,6 +424,10 @@ export default function ManagePages({
         )}
       </div>
       </div>
+
+      {moveAsk && (
+        <MoveConfirm ask={moveAsk} onCancel={() => setMoveAsk(null)} onConfirm={confirmMove} />
+      )}
     </div>
   );
 }
