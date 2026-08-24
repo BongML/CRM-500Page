@@ -100,3 +100,19 @@ export const SWATCH_COLORS = [
   "#2563eb", "#7c3aed", "#ea580c", "#16a34a",
   "#d97706", "#0891b2", "#db2777", "#65a30d",
 ];
+
+/**
+ * Link công khai của fanpage để bấm mở tab mới.
+ *
+ * Ưu tiên cột "External links" của báo cáo benchmark (đôi khi thiếu giao thức
+ * nên phải thêm https://). Không có link thì dựng từ Profile-ID, nhưng chỉ khi
+ * đó là ID số thật của Facebook — page thiếu Profile-ID được gán mã nội bộ
+ * dạng "fp…" (xem pageFallbackId) nên không mở được.
+ */
+export function pageHref(page: { url: string | null; ref?: string }): string | null {
+  const raw = page.url?.trim();
+  if (raw) return /^https?:\/\//i.test(raw) ? raw : `https://${raw.replace(/^\/+/, "")}`;
+
+  const ref = page.ref?.trim();
+  return ref && /^\d{5,}$/.test(ref) ? `https://www.facebook.com/${ref}` : null;
+}

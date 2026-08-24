@@ -5,11 +5,11 @@ import { btnGhost, btnMini, btnPrimary, cardHint, cardTitle, inputMini, select, 
 import { int, tint } from "@/lib/format";
 import { followerRank, hotLevel } from "@/lib/rank";
 import type { Group, Niche, Owner, Page, Sub } from "@/lib/types";
-import { Avatar, HotMeter, RankBadge } from "./Atoms";
+import { Avatar, HotMeter, RankBadge, VisitPageButton } from "./Atoms";
 import ClassifyLegend from "./ClassifyLegend";
 import MoveConfirm, { type MoveAsk } from "./MoveConfirm";
 
-const COLS = "34px minmax(180px,2.2fr) 84px 46px 140px 140px 150px 92px 66px";
+const COLS = "34px minmax(180px,2.2fr) 84px 46px 140px 140px 150px 92px 152px";
 
 /**
  * Bảng gán page: tìm kiếm, lọc, tick nhiều dòng rồi gán ngách / chuyển nhóm
@@ -404,7 +404,8 @@ export default function ManagePages({
 
               <span style={{ ...tnum, fontSize: 12.5, textAlign: "right" }}>{int(p.views)}</span>
 
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
+                <VisitPageButton page={p} />
                 <button
                   onClick={() => onDeletePage(p.id)}
                   style={{ ...btnMini, color: "var(--danger)" }}

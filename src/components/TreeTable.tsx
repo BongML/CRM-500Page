@@ -5,7 +5,7 @@ import { avatarBg, dec1, initials, int, nicheById, pct, statusOf, statusStyle, v
 import { caret, treeCols, tnum } from "@/lib/ui";
 import { followerRank, hotLevel, postsPerDay, REPORT_DAYS } from "@/lib/rank";
 import type { Group, Niche, Owner, Page, Sub } from "@/lib/types";
-import { Avatar, HotMeter, NicheTag, RankBadge, StatusBadge } from "./Atoms";
+import { Avatar, HotMeter, NicheTag, RankBadge, StatusBadge, VisitPageButton } from "./Atoms";
 
 const GRID = {
   display: "grid",
@@ -303,6 +303,7 @@ export default function TreeTable({
                             >
                               {p.name}
                             </span>
+                            <VisitPageButton page={p} compact />
                           </div>
                           <div>
                             <NicheTag niche={nc} />

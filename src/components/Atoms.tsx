@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type CSSProperties } from "react";
-import { avatarBg, initials as initialsOf, statusOf, statusStyle, tint } from "@/lib/format";
+import { avatarBg, initials as initialsOf, pageHref, statusOf, statusStyle, tint } from "@/lib/format";
 import { tnum } from "@/lib/ui";
 import { hotColor, hotMeta, rankMeta, type HotLevel, type Rank } from "@/lib/rank";
 import type { Niche } from "@/lib/types";
@@ -437,5 +437,81 @@ export function PostThumb({
         </span>
       )}
     </div>
+  );
+}
+
+/**
+ * Nút mở fanpage trong tab mới, dùng chung cho bảng cây danh mục và bảng gán
+ * page. Đặt trong dòng có sẵn hành vi khác (click mở chi tiết, kéo thả) nên
+ * phải chặn sự kiện nổi lên và tắt drag riêng của thẻ <a>.
+ *
+ * Page không có link (báo cáo thiếu External links và Profile-ID không phải ID
+ * số) vẫn hiện nút nhưng ở trạng thái mờ, không bấm được — để cột không bị so
+ * le giữa các dòng.
+ */
+export function VisitPageButton({
+  page,
+  compact = false,
+}: {
+  page: { name: string; url: string | null; ref?: string };
+  /** Chỉ hiện mũi tên, không kèm chữ — dùng trong bảng cây chật chỗ. */
+  compact?: boolean;
+}) {
+  const href = pageHref(page);
+
+  const base: CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    flex: "none",
+    height: compact ? 20 : 26,
+    padding: compact ? "0 5px" : "0 9px",
+    border: "1px solid var(--border)",
+    borderRadius: 6,
+    fontSize: compact ? 10.5 : 12,
+    fontWeight: 500,
+    lineHeight: 1,
+    textDecoration: "none",
+    color: "var(--muted)",
+    background: "transparent",
+    whiteSpace: "nowrap",
+  };
+
+  if (!href) {
+    return (
+      <span
+        aria-hidden
+        title={`${page.name} chưa có link trang trong báo cáo`}
+        style={{ ...base, opacity: 0.35, cursor: "default" }}
+      >
+        <span>↗</span>
+        {!compact && <span>Truy cập</span>}
+      </span>
+    );
+  }
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer noopener"
+      draggable={false}
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      title={`Mở ${page.name} — ${href}`}
+      aria-label={`Truy cập trang ${page.name}`}
+      style={base}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.color = "var(--accent)";
+        e.currentTarget.style.borderColor = "var(--accent)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.color = "var(--muted)";
+        e.currentTarget.style.borderColor = "var(--border)";
+      }}
+    >
+      <span aria-hidden>↗</span>
+      {!compact && <span>Truy cập</span>}
+    </a>
   );
 }
