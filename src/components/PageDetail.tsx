@@ -1,11 +1,12 @@
 "use client";
 
-import { int, negStyle, nicheById, pct, tint, vShort } from "@/lib/format";
+import { int, mainNiche, negStyle, nichesOf, pct, tint, vShort } from "@/lib/format";
 import { dayLabel } from "@/lib/series";
 import { cardHint, cardTitle, screenPad, thBase, tnum } from "@/lib/ui";
 import type { Group, Niche, Page, TopPost } from "@/lib/types";
 import { followerRank, hotMeta, rankMeta, type HotLevel } from "@/lib/rank";
 import { Avatar, HotMeter, MiniKpi, NicheDot, PostCaption, PostThumb, RankBadge, isVideoPost } from "./Atoms";
+import NichePicker from "./NichePicker";
 
 /** Ngưỡng chênh lệch PPI để ra khuyến nghị giữ / đổi ngách. */
 const DIFF_BAND = 6;
@@ -34,9 +35,10 @@ function suggest(page: Page, niche: Niche, niches: Niche[]): Suggestion {
   }
 
   if (diff <= -DIFF_BAND) {
-    // Ngách mà page vượt trội nhất so với PPI trung bình của ngách đó.
+    // Ngách mà page vượt trội nhất so với PPI trung bình của ngách đó — chỉ xét
+    // ngách page **chưa** mang, kể cả khi page đang giữ nhiều ngách cùng lúc.
     const better = niches
-      .filter((x) => x.id !== niche.id)
+      .filter((x) => !page.nicheIds.includes(x.id))
       .sort((a, b) => page.ppi - a.aggPpi - (page.ppi - b.aggPpi))
       .reverse()[0];
 
@@ -70,7 +72,7 @@ export default function PageDetail({
   hot,
   negThreshold,
   onBack,
-  onChangeNiche,
+  onChangeNiches,
 }: {
   page: Page;
   niches: Niche[];
@@ -80,9 +82,13 @@ export default function PageDetail({
   hot: HotLevel;
   negThreshold: number;
   onBack: () => void;
-  onChangeNiche: (nicheId: string) => void;
+  /** Nhận **toàn bộ** tập ngách mới của page (mảng rỗng = bỏ khỏi mọi ngách). */
+  onChangeNiches: (nicheIds: string[]) => void;
 }) {
-  const niche = nicheById(niches, page.nicheId);
+  const own = nichesOf(niches, page.nicheIds);
+  // Khuyến nghị và mức chênh PPI so ngách chính — chỉ số agg* của page nhiều
+  // ngách so cùng lúc với vài mặt bằng khác nhau thì không đọc ra kết luận nào.
+  const niche = mainNiche(niches, page.nicheIds);
   const group = groups.find((g) => g.id === page.groupId);
   const rank = followerRank(page.follower);
   const diff = page.ppi - niche.aggPpi;
@@ -148,21 +154,28 @@ export default function PageDetail({
               color: "var(--muted)",
             }}
           >
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "3px 9px",
-                borderRadius: 20,
-                background: tint(niche.color),
-                color: niche.color,
-                fontWeight: 500,
-              }}
-            >
-              <NicheDot color={niche.color} />
-              {niche.name}
-            </span>
+            {own.length === 0 && (
+              <span style={{ color: "var(--faint)" }}>Chưa gán ngách</span>
+            )}
+            {own.map((n, i) => (
+              <span
+                key={n.id}
+                title={i === 0 ? "Ngách chính" : undefined}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "3px 9px",
+                  borderRadius: 20,
+                  background: tint(n.color),
+                  color: n.color,
+                  fontWeight: 500,
+                }}
+              >
+                <NicheDot color={n.color} />
+                {n.name}
+              </span>
+            ))}
             <span
               style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
               title={`${hot}/5 ⚡ — ${hotMeta(hot).label}: ${hotMeta(hot).note}`}
@@ -180,29 +193,15 @@ export default function PageDetail({
             </span>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 12, color: "var(--muted)" }}>Đổi ngách:</span>
-          <select
-            value={page.nicheId}
-            onChange={(e) => onChangeNiche(e.target.value)}
-            aria-label="Đổi ngách của page"
-            style={{
-              height: 34,
-              padding: "0 26px 0 10px",
-              border: "1px solid var(--border-strong)",
-              borderRadius: 8,
-              background: "var(--surface)",
-              color: "var(--text)",
-              fontSize: 12.5,
-              cursor: "pointer",
-            }}
-          >
-            {niches.map((n) => (
-              <option key={n.id} value={n.id}>
-                {n.name}
-              </option>
-            ))}
-          </select>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flex: "none" }}>
+          <span style={{ fontSize: 12, color: "var(--muted)" }}>Ngách:</span>
+          <NichePicker
+            niches={niches}
+            value={page.nicheIds}
+            onChange={onChangeNiches}
+            width={200}
+            align="right"
+          />
         </div>
       </div>
 

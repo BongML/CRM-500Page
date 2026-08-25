@@ -464,7 +464,7 @@ export async function POST(req: Request) {
         reach: 0,
         groupId,
         subId,
-        nicheId: niche,
+        nicheIds: [niche],
         userId,
       });
     }

@@ -2,13 +2,17 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/api";
 import { refreshNiches } from "@/lib/aggregate";
+import { cleanNiches, ownedNiches } from "@/lib/niche";
 import { requireScope, scopeWhere } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Cập nhật 1 page: đổi ngách (từ trang chi tiết) hoặc chuyển sub-group (kéo-thả).
- * Body: { nicheId? } | { groupId, subId }
+ * Body: { nicheIds? } | { groupId, subId }
+ *
+ * `nicheIds` là **toàn bộ** tập ngách của page sau khi sửa, không phải phần thêm
+ * vào: gửi mảng rỗng là gỡ page khỏi mọi ngách. Phần tử đầu là ngách chính.
  *
  * Chủ sở hữu lấy từ **chính page** chứ không từ phiên: tài khoản tổng sửa được
  * page của mọi người, nhưng ngách/nhóm đích vẫn buộc phải cùng chủ với page —
@@ -19,10 +23,14 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (!auth.ok) return auth.response;
 
   const { id } = await ctx.params;
-  const body = (await req.json()) as { nicheId?: string; groupId?: string; subId?: string };
+  const body = (await req.json()) as {
+    nicheIds?: string[];
+    groupId?: string;
+    subId?: string;
+  };
 
-  const data: { nicheId?: string; groupId?: string; subId?: string } = {};
-  if (body.nicheId) data.nicheId = body.nicheId;
+  const data: { nicheIds?: string[]; groupId?: string; subId?: string } = {};
+  if (Array.isArray(body.nicheIds)) data.nicheIds = cleanNiches(body.nicheIds);
   if (body.groupId) data.groupId = body.groupId;
   if (body.subId) data.subId = body.subId;
 
@@ -32,7 +40,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
   const before = await prisma.page.findFirst({
     where: { id, ...scopeWhere(auth.scope) },
-    select: { nicheId: true, userId: true },
+    select: { nicheIds: true, userId: true },
   });
   if (!before) return NextResponse.json({ error: "Page không còn tồn tại." }, { status: 404 });
 
@@ -44,17 +52,20 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     if (!sub) return NextResponse.json({ error: "Sub-group không tồn tại." }, { status: 400 });
     data.groupId = sub.groupId;
   }
-  if (data.nicheId) {
-    const niche = await prisma.niche.findFirst({ where: { id: data.nicheId, userId } });
-    if (!niche) return NextResponse.json({ error: "Ngách không tồn tại." }, { status: 400 });
+  if (data.nicheIds?.length) {
+    const valid = await ownedNiches(userId, data.nicheIds);
+    if (valid.length !== data.nicheIds.length) {
+      return NextResponse.json({ error: "Ngách không tồn tại." }, { status: 400 });
+    }
+    data.nicheIds = valid;
   }
 
   try {
     await prisma.page.updateMany({ where: { id, userId }, data });
     const page = await prisma.page.findUniqueOrThrow({ where: { id } });
 
-    // Đổi ngách làm lệch số tổng hợp của cả ngách cũ lẫn ngách mới.
-    if (before.nicheId !== page.nicheId) await refreshNiches([before.nicheId, page.nicheId]);
+    // Đổi ngách làm lệch số tổng hợp của cả ngách vừa rời lẫn ngách vừa vào.
+    if (data.nicheIds) await refreshNiches([...before.nicheIds, ...page.nicheIds]);
     return NextResponse.json(page);
   } catch (e) {
     return apiError(e, "Không cập nhật được page.");
@@ -70,14 +81,14 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   try {
     const page = await prisma.page.findFirst({
       where: { id, ...scopeWhere(auth.scope) },
-      select: { nicheId: true, userId: true },
+      select: { nicheIds: true, userId: true },
     });
     if (!page) return NextResponse.json({ error: "Page không còn tồn tại." }, { status: 404 });
 
     // Xóa bài của page trước: giữ lại thì chúng thành mồ côi mà vẫn tính vào ngách.
     await prisma.topPost.deleteMany({ where: { userId: page.userId, pageId: id } });
     await prisma.page.deleteMany({ where: { id, userId: page.userId } });
-    await refreshNiches([page.nicheId]);
+    await refreshNiches(page.nicheIds);
     return NextResponse.json({ ok: true });
   } catch (e) {
     return apiError(e, "Không xóa được page.");

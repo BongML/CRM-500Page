@@ -1,5 +1,6 @@
 // Fanpage CRM data model.
 // Hierarchy: User — Niche (ngách) — Group (nhóm 25 page) — SubGroup — Page — TopPost.
+// Ngách không nằm trên trục đó: một page mang **nhiều** ngách (Page.nicheIds).
 //
 // Mỗi User là một không gian dữ liệu riêng: MỌI bảng nghiệp vụ đều mang `userId`
 // và mọi truy vấn phải lọc theo nó (xem `requireUser` trong lib/session.ts).
@@ -59,7 +60,6 @@ model Niche {
   order     Int        @default(0)
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
-  pages     Page[]
   topPosts  TopPost[]
   trends    Trend[]
   snapshots Snapshot[]
@@ -128,8 +128,13 @@ model Page {
   groupId  String
   sub      SubGroup  @relation(fields: [subId], references: [id])
   subId    String
-  niche    Niche     @relation(fields: [nicheId], references: [id])
-  nicheId  String
+  /// Các ngách mà page thuộc về — một page có thể mang **nhiều** ngách cùng lúc.
+  /// Cố ý là mảng id thường chứ không phải khóa ngoại: Postgres không ràng buộc
+  /// được từng phần tử, đổi lại việc gán/bỏ ngách chỉ là một lệnh ghi trên chính
+  /// hàng Page. Phần tử đầu là **ngách chính** (dùng cho top content, hashtag và
+  /// các chỗ chỉ hiển thị được một nhãn). Mảng rỗng = chưa gán ngách nào.
+  /// Ngách bị xóa phải được gỡ khỏi mảng của mọi page (xem DELETE /api/niches/[id]).
+  nicheIds String[]
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId   String
   topPosts TopPost[]
@@ -137,7 +142,6 @@ model Page {
   @@unique([userId, ref])
   @@index([groupId])
   @@index([subId])
-  @@index([nicheId])
   @@index([userId, slug])
 }
 

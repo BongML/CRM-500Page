@@ -27,7 +27,11 @@ export type Page = {
   name: string;
   groupId: string;
   subId: string;
-  nicheId: string;
+  /**
+   * Các ngách page thuộc về — một page mang được **nhiều** ngách. Phần tử đầu là
+   * ngách chính (nhãn dùng ở chỗ chỉ hiện được một ngách). Mảng rỗng = chưa gán.
+   */
+  nicheIds: string[];
   follower: number;
   posts: number;
   likes: number;

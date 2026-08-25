@@ -4,17 +4,23 @@ import { useState } from "react";
 import type { Niche } from "@/lib/types";
 import { NicheDot } from "./Atoms";
 
-/** Thanh bulk nổi giữa dưới màn khi có page được tick. */
+/**
+ * Thanh bulk nổi giữa dưới màn khi có page được tick.
+ *
+ * Bấm một ngách là **thêm** ngách đó cho mọi page đã chọn — page giữ nhiều ngách
+ * nên các ngách sẵn có không bị thay mất. Muốn thay trọn hoặc gỡ bớt thì dùng
+ * bảng "Gán page vào nhóm & ngách" ở màn Quản lý.
+ */
 export default function BulkBar({
   count,
   niches,
-  onAssign,
+  onAdd,
   onDelete,
   onClear,
 }: {
   count: number;
   niches: Niche[];
-  onAssign: (nicheId: string) => void;
+  onAdd: (nicheId: string) => void;
   onDelete: () => void;
   onClear: () => void;
 }) {
@@ -41,12 +47,14 @@ export default function BulkBar({
       }}
     >
       <span style={{ fontSize: 13, fontWeight: 600 }}>{count} page đã chọn</span>
-      <span style={{ fontSize: 12, opacity: 0.7 }}>Gán ngách:</span>
+      <span style={{ fontSize: 12, opacity: 0.7 }} title="Ngách được thêm vào, không thay ngách sẵn có">
+        Thêm ngách:
+      </span>
       <div style={{ display: "flex", gap: 7 }}>
         {niches.map((n) => (
           <button
             key={n.id}
-            onClick={() => onAssign(n.id)}
+            onClick={() => onAdd(n.id)}
             style={{
               display: "flex",
               alignItems: "center",

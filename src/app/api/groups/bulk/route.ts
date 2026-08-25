@@ -44,7 +44,7 @@ export async function DELETE(req: Request) {
   // groupId là khóa chính toàn cục nên lọc theo nhóm là đủ.
   const inside = await prisma.page.findMany({
     where: { groupId: { in: groupIds } },
-    select: { id: true, nicheId: true },
+    select: { id: true, nicheIds: true },
   });
 
   if (inside.length && !withPages) {
@@ -69,7 +69,7 @@ export async function DELETE(req: Request) {
   const deleted = await prisma.group.deleteMany({ where: { id: { in: groupIds } } });
 
   // Ngách của các page vừa mất phải tính lại, nếu không dashboard treo số cũ.
-  if (inside.length) await refreshNiches(inside.map((p) => p.nicheId));
+  if (inside.length) await refreshNiches(inside.flatMap((p) => p.nicheIds));
 
   return NextResponse.json({ deleted: deleted.count, pages: inside.length, posts });
 }

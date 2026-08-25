@@ -1,14 +1,19 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { SWATCH_COLORS, nicheById, tint } from "@/lib/format";
+import { SWATCH_COLORS, nichesOf, tint } from "@/lib/format";
 import { label } from "@/lib/ui";
 import type { Niche, Page } from "@/lib/types";
 import { Avatar } from "./Atoms";
 
 export type NicheDraft = { id: string | null; name: string; color: string };
 
-/** Modal tạo/chỉnh ngách: tên + màu + multi-select page có search. */
+/**
+ * Modal tạo/chỉnh ngách: tên + màu + multi-select page có search.
+ *
+ * Danh sách tick là **thành viên đầy đủ** của ngách: bỏ tick một page là gỡ page
+ * khỏi ngách này, các ngách khác của page không bị đụng tới.
+ */
 export default function NicheModal({
   draft,
   pages,
@@ -28,7 +33,9 @@ export default function NicheModal({
   // Chỉnh ngách: các page đang thuộc ngách được tick sẵn.
   const [picked, setPicked] = useState<Record<string, boolean>>(() =>
     draft.id
-      ? Object.fromEntries(pages.filter((p) => p.nicheId === draft.id).map((p) => [p.id, true]))
+      ? Object.fromEntries(
+          pages.filter((p) => p.nicheIds.includes(draft.id!)).map((p) => [p.id, true]),
+        )
       : {},
   );
   const [busy, setBusy] = useState(false);
@@ -178,6 +185,9 @@ export default function NicheModal({
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <label style={label}>Gán vào page ({selectedCount} đã chọn)</label>
+            <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: -3 }}>
+              Page giữ nguyên các ngách khác — bỏ tick chỉ gỡ page khỏi ngách này.
+            </div>
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -222,8 +232,19 @@ export default function NicheModal({
                   />
                   <Avatar name={p.name} src={p.image} size={22} radius={5} fontSize={9} />
                   {p.name}
-                  <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--faint)" }}>
-                    {nicheById(niches, p.nicheId).name}
+                  <span
+                    style={{
+                      marginLeft: "auto",
+                      fontSize: 11,
+                      color: "var(--faint)",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      maxWidth: 150,
+                    }}
+                    title={nichesOf(niches, p.nicheIds).map((n) => n.name).join(", ")}
+                  >
+                    {nichesOf(niches, p.nicheIds).map((n) => n.name).join(", ") || "Chưa gán ngách"}
                   </span>
                 </label>
               ))}

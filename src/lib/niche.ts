@@ -38,3 +38,24 @@ export function nicheResolver(userId: string, preferred: string | null) {
     return (cached = created.id);
   };
 }
+
+/** Bỏ id rỗng/trùng, giữ nguyên thứ tự chọn — phần tử đầu là ngách chính. */
+export const cleanNiches = (ids: readonly string[]): string[] =>
+  [...new Set(ids.map((s) => String(s ?? "").trim()).filter(Boolean))];
+
+/**
+ * Lọc danh sách ngách người dùng gửi lên, chỉ giữ những ngách **có thật và
+ * thuộc đúng tài khoản** đó — không có đường nào gán page của A vào ngách của B.
+ * Thứ tự người dùng chọn được giữ nguyên vì phần tử đầu là ngách chính.
+ */
+export async function ownedNiches(userId: string, ids: readonly string[]): Promise<string[]> {
+  const wanted = cleanNiches(ids);
+  if (!wanted.length) return [];
+
+  const found = await prisma.niche.findMany({
+    where: { id: { in: wanted }, userId },
+    select: { id: true },
+  });
+  const ok = new Set(found.map((n) => n.id));
+  return wanted.filter((id) => ok.has(id));
+}

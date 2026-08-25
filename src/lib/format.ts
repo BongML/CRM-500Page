@@ -95,6 +95,22 @@ export function nicheById(niches: Niche[], id: string): Niche {
   return niches.find((n) => n.id === id) ?? UNKNOWN_NICHE;
 }
 
+/**
+ * Các ngách của một page, theo đúng thứ tự đã gán. Id trỏ tới ngách đã bị xóa
+ * bị bỏ qua thay vì hiện thành ô trống, nên mảng trả về có thể ngắn hơn đầu vào.
+ */
+export function nichesOf(niches: Niche[], ids: readonly string[]): Niche[] {
+  return ids.map((id) => niches.find((n) => n.id === id)).filter((n): n is Niche => !!n);
+}
+
+/**
+ * Ngách chính của page — dùng ở những chỗ chỉ hiển thị được một nhãn (cây phân
+ * cấp, bảng gợi ý…). Page chưa gán ngách nào rơi về nhãn "Chưa phân loại".
+ */
+export function mainNiche(niches: Niche[], ids: readonly string[]): Niche {
+  return nichesOf(niches, ids)[0] ?? UNKNOWN_NICHE;
+}
+
 /** Bảng màu chọn khi tạo ngách. */
 export const SWATCH_COLORS = [
   "#2563eb", "#7c3aed", "#ea580c", "#16a34a",

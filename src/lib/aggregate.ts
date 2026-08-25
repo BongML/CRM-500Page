@@ -13,7 +13,9 @@ import { prisma } from "./prisma";
 export async function refreshNiches(nicheIds: Iterable<string>) {
   for (const id of new Set(nicheIds)) {
     const agg = await prisma.page.aggregate({
-      where: { nicheId: id },
+      // Page mang nhiều ngách nên nó được tính vào **mọi** ngách nó thuộc về:
+      // tổng số page của các ngách cộng lại có thể lớn hơn số page thật.
+      where: { nicheIds: { has: id } },
       _count: { _all: true },
       _sum: { views: true, reach: true },
       _avg: { rate: true, ppi: true },

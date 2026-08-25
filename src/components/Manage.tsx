@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { screenPad } from "@/lib/ui";
 import type { AdminUser, Group, Niche, Owner, Page, Sub } from "@/lib/types";
+import type { NicheMode } from "./CrmApp";
 import type { NicheDraft } from "./NicheModal";
 import ArrangePanel from "./ArrangePanel";
 import ImportPanel from "./ImportPanel";
@@ -46,7 +47,7 @@ export default function Manage({
   subs,
   pages,
   onImported,
-  onAssignNiche,
+  onAssignNiches,
   onMovePage,
   onBulk,
   onDeletePage,
@@ -70,9 +71,12 @@ export default function Manage({
   subs: Sub[];
   pages: Page[];
   onImported: () => void;
-  onAssignNiche: (pageId: string, nicheId: string) => void;
+  onAssignNiches: (pageId: string, nicheIds: string[]) => void;
   onMovePage: (pageId: string, groupId: string, subId: string) => void;
-  onBulk: (ids: string[], change: { nicheId?: string; subId?: string }) => void;
+  onBulk: (
+    ids: string[],
+    change: { nicheIds?: string[]; nicheMode?: NicheMode; subId?: string },
+  ) => void;
   onDeletePage: (pageId: string) => void;
   onDeletePages: (ids: string[]) => void;
   onCreateGroup: (name: string) => void;
@@ -139,7 +143,7 @@ export default function Manage({
           groups={groups}
           subs={subs}
           owners={owners}
-          onAssignNiche={onAssignNiche}
+          onAssignNiches={onAssignNiches}
           onMovePage={onMovePage}
           onBulk={onBulk}
           onDeletePages={onDeletePages}

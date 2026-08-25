@@ -1,13 +1,24 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { refreshNiches } from "@/lib/aggregate";
+import { runBatch } from "@/lib/batch";
+import { cleanNiches } from "@/lib/niche";
 import { requireScope, scopeWhere } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
+/** Cách áp tập ngách lên page đã chọn. */
+type NicheMode = "set" | "add" | "remove";
+
 /**
  * Thao tác hàng loạt trên page đã chọn: gán ngách và/hoặc chuyển nhóm.
- * Body: { ids: string[], nicheId?: string, groupId?: string, subId?: string }
+ * Body: { ids: string[], nicheIds?: string[], nicheMode?, groupId?, subId? }
+ *
+ * `nicheMode` quyết định ý nghĩa của `nicheIds` — một page giữ nhiều ngách nên
+ * "gán" không còn hiển nhiên là thay thế:
+ *   set    — thay trọn tập ngách của page (mặc định)
+ *   add    — thêm vào tập đang có, giữ nguyên ngách cũ
+ *   remove — gỡ các ngách này khỏi page
  *
  * Ngách/sub-group đích quyết định chủ sở hữu: chỉ những page cùng chủ với đích
  * mới được đổi. Nhờ vậy tài khoản tổng có thể tick page của nhiều người rồi gán
@@ -19,26 +30,41 @@ export async function POST(req: Request) {
   if (!auth.ok) return auth.response;
   const where = scopeWhere(auth.scope);
 
-  const { ids, nicheId, groupId, subId } = (await req.json()) as {
+  const body = (await req.json()) as {
     ids?: string[];
-    nicheId?: string;
+    nicheIds?: string[];
+    nicheMode?: NicheMode;
     groupId?: string;
     subId?: string;
   };
+  const { ids, groupId, subId } = body;
+  const nicheIds = Array.isArray(body.nicheIds) ? cleanNiches(body.nicheIds) : null;
+  const nicheMode: NicheMode = body.nicheMode ?? "set";
 
   if (!Array.isArray(ids) || ids.length === 0) {
     return NextResponse.json({ error: "Chưa chọn page nào." }, { status: 400 });
   }
 
-  const data: { nicheId?: string; groupId?: string; subId?: string } = {};
+  const move: { groupId?: string; subId?: string } = {};
   /** Chủ sở hữu suy ra từ đích — mọi thao tác ghi bị khóa trong không gian này. */
   let owner: string | null = null;
 
-  if (nicheId) {
-    const niche = await prisma.niche.findFirst({ where: { id: nicheId, ...where } });
-    if (!niche) return NextResponse.json({ error: "Ngách không tồn tại." }, { status: 400 });
-    data.nicheId = nicheId;
-    owner = niche.userId;
+  if (nicheIds?.length) {
+    const found = await prisma.niche.findMany({
+      where: { id: { in: nicheIds }, ...where },
+      select: { id: true, userId: true },
+    });
+    if (found.length !== nicheIds.length) {
+      return NextResponse.json({ error: "Ngách không tồn tại." }, { status: 400 });
+    }
+    const owners = new Set(found.map((n) => n.userId));
+    if (owners.size > 1) {
+      return NextResponse.json(
+        { error: "Các ngách đã chọn thuộc nhiều tài khoản khác nhau." },
+        { status: 400 },
+      );
+    }
+    owner = found[0].userId;
   }
 
   // Chuyển nhóm luôn đi theo cặp group + sub để dữ liệu không lệch.
@@ -54,28 +80,75 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
-    data.subId = sub.id;
-    data.groupId = sub.groupId;
+    move.subId = sub.id;
+    move.groupId = sub.groupId;
     owner = sub.userId;
   } else if (groupId) {
     return NextResponse.json({ error: "Chọn sub-group đích để chuyển nhóm." }, { status: 400 });
   }
 
-  if (Object.keys(data).length === 0 || !owner) {
+  // Gỡ sạch ngách (mảng rỗng) không có đích nào để suy ra chủ sở hữu, nên lô đó
+  // rơi về đúng phạm vi của phiên thay vì phạm vi của ngách đích.
+  const touchesNiche = nicheIds !== null;
+  if (!touchesNiche && !move.subId) {
     return NextResponse.json({ error: "Không có thay đổi nào." }, { status: 400 });
   }
 
-  // Ngách nguồn phải được tính lại cùng ngách đích, nên lấy trước khi ghi.
+  /** Page thật sự được phép chạm tới — kèm ngách cũ để tính lại số tổng hợp. */
   const before = await prisma.page.findMany({
-    where: { id: { in: ids }, userId: owner },
-    select: { nicheId: true },
+    where: { id: { in: ids }, ...(owner ? { userId: owner } : where) },
+    select: { id: true, nicheIds: true },
   });
 
-  const res = await prisma.page.updateMany({ where: { id: { in: ids }, userId: owner }, data });
+  let updated = 0;
+  const touched = new Set<string>();
 
-  if (data.nicheId) await refreshNiches([...before.map((p) => p.nicheId), data.nicheId]);
+  if (touchesNiche) {
+    // "set" là một lệnh ghi cho cả lô; "add"/"remove" phải tính theo từng page
+    // vì tập ngách cũ mỗi page một khác.
+    if (nicheMode === "set" && !move.subId) {
+      const res = await prisma.page.updateMany({
+        where: { id: { in: before.map((p) => p.id) } },
+        data: { nicheIds: nicheIds ?? [] },
+      });
+      updated = res.count;
+    } else {
+      await runBatch(
+        before.map((p) =>
+          prisma.page.update({
+            where: { id: p.id },
+            data: { ...move, nicheIds: applyNiches(p.nicheIds, nicheIds ?? [], nicheMode) },
+          }),
+        ),
+      );
+      updated = before.length;
+    }
 
-  return NextResponse.json({ updated: res.count, skipped: ids.length - res.count });
+    for (const p of before) {
+      for (const id of p.nicheIds) touched.add(id);
+      for (const id of applyNiches(p.nicheIds, nicheIds ?? [], nicheMode)) touched.add(id);
+    }
+  } else {
+    const res = await prisma.page.updateMany({
+      where: { id: { in: before.map((p) => p.id) } },
+      data: move,
+    });
+    updated = res.count;
+  }
+
+  if (touched.size) await refreshNiches(touched);
+
+  return NextResponse.json({ updated, skipped: ids.length - updated });
+}
+
+/** Tập ngách mới của một page sau khi áp `mode`. Thứ tự cũ được giữ nguyên. */
+function applyNiches(current: string[], picked: string[], mode: NicheMode): string[] {
+  if (mode === "set") return picked;
+  if (mode === "remove") {
+    const drop = new Set(picked);
+    return current.filter((id) => !drop.has(id));
+  }
+  return [...new Set([...current, ...picked])];
 }
 
 /**
@@ -97,7 +170,7 @@ export async function DELETE(req: Request) {
   // Lọc theo phạm vi trước: người dùng thường chỉ chạm được page của mình.
   const mine = await prisma.page.findMany({
     where: { id: { in: ids }, ...scopeWhere(auth.scope) },
-    select: { id: true, nicheId: true },
+    select: { id: true, nicheIds: true },
   });
   if (!mine.length) {
     return NextResponse.json({ error: "Không tìm thấy page nào để xóa." }, { status: 404 });
@@ -109,7 +182,7 @@ export async function DELETE(req: Request) {
   const deleted = await prisma.page.deleteMany({ where: { id: { in: pageIds } } });
 
   // Ngách của các page vừa xóa phải tính lại, nếu không dashboard treo số cũ.
-  await refreshNiches(mine.map((p) => p.nicheId));
+  await refreshNiches(mine.flatMap((p) => p.nicheIds));
 
   return NextResponse.json({ deleted: deleted.count, posts: posts.count });
 }

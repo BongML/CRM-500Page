@@ -20,7 +20,8 @@ export default function ManageNiches({
 }) {
   const [deleting, setDeleting] = useState<{ id: string; moveTo: string } | null>(null);
 
-  const countOf = (id: string) => pages.filter((p) => p.nicheId === id).length;
+  // Page mang nhiều ngách nên được đếm ở mọi ngách nó thuộc về.
+  const countOf = (id: string) => pages.filter((p) => p.nicheIds.includes(id)).length;
 
   return (
     <div
@@ -36,7 +37,9 @@ export default function ManageNiches({
     >
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
         <div style={cardTitle}>Ngách (thẻ phân loại page)</div>
-        <div style={cardHint}>Xóa ngách thì page trong ngách được chuyển sang ngách khác</div>
+        <div style={cardHint}>
+          Một page gán được nhiều ngách · xóa ngách thì page trong ngách được chuyển sang ngách khác
+        </div>
       </div>
 
       <div>

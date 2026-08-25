@@ -75,7 +75,8 @@ export function statsOf(pages: Page[]): PageStats {
     comments += p.comments;
     rate += p.rate;
     ppi += p.ppi;
-    niches.add(p.nicheId);
+    // Page nhiều ngách được tính vào mọi ngách nó mang.
+    for (const id of p.nicheIds) niches.add(id);
   }
 
   const n = pages.length;

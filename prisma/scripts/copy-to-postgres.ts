@@ -96,7 +96,8 @@ async function main() {
       source: str(p.source),
       groupId: req(p.groupId),
       subId: req(p.subId),
-      nicheId: req(p.nicheId),
+      // Bản cũ mỗi page một ngách; nay là mảng, ngách cũ thành ngách chính.
+      nicheIds: [req(p.nicheId)],
       userId: req(p.userId),
     })),
   });

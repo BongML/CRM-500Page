@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { avatarBg, dec1, initials, int, nicheById, pct, statusOf, statusStyle, vShort } from "@/lib/format";
+import { avatarBg, dec1, initials, int, nicheById, nichesOf, pct, statusOf, statusStyle, vShort } from "@/lib/format";
 import { caret, treeCols, tnum } from "@/lib/ui";
 import { followerRank, hotLevel, postsPerDay, REPORT_DAYS } from "@/lib/rank";
 import type { Group, Niche, Owner, Page, Sub } from "@/lib/types";
-import { Avatar, HotMeter, NicheTag, RankBadge, StatusBadge, VisitPageButton } from "./Atoms";
+import { Avatar, HotMeter, NicheTags, RankBadge, StatusBadge, VisitPageButton } from "./Atoms";
 
 const GRID = {
   display: "grid",
@@ -100,7 +100,8 @@ export default function TreeTable({
     const gpages = pages.filter((p) => p.groupId === g.id);
     const agg = roll(gpages);
 
-    const mixIds = [...new Set(gpages.map((p) => p.nicheId))];
+    // Page nhiều ngách góp mặt ở mọi ngách nó mang, nên "mix" liệt kê đủ.
+    const mixIds = [...new Set(gpages.flatMap((p) => p.nicheIds))];
     const mix =
       mixIds
         .slice(0, 2)
@@ -252,7 +253,7 @@ export default function TreeTable({
 
                   {sOpen &&
                     spages.map((p) => {
-                      const nc = nicheById(niches, p.nicheId);
+                      const ncs = nichesOf(niches, p.nicheIds);
                       return (
                         <div
                           key={p.id}
@@ -306,7 +307,7 @@ export default function TreeTable({
                             <VisitPageButton page={p} compact />
                           </div>
                           <div>
-                            <NicheTag niche={nc} />
+                            <NicheTags niches={ncs} />
                           </div>
                           <div>
                             <HotMeter level={hotLevel(p.views)} size={11} />
@@ -381,7 +382,7 @@ export default function TreeTable({
         const agg = roll(opages);
         const isOpen = !!ownerExpanded[owner.id];
         const allChecked = opages.length > 0 && opages.every((p) => selected[p.id]);
-        const nicheCount = new Set(opages.map((p) => p.nicheId)).size;
+        const nicheCount = new Set(opages.flatMap((p) => p.nicheIds)).size;
 
         return (
           <div key={owner.id}>

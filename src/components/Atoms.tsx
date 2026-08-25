@@ -46,6 +46,35 @@ export function NicheTag({ niche, size = 11 }: { niche: Niche; size?: number }) 
   );
 }
 
+/**
+ * Nhãn ngách của một page ở chỗ chỉ đủ chỗ cho một dòng: hiện ngách chính, kèm
+ * "+n" khi page còn mang thêm ngách khác (di chuột để xem đủ tên).
+ */
+export function NicheTags({ niches, size = 11 }: { niches: Niche[]; size?: number }) {
+  const head = niches[0];
+  if (!head) {
+    return (
+      <span style={{ fontSize: size, color: "var(--faint)", whiteSpace: "nowrap" }}>
+        Chưa gán ngách
+      </span>
+    );
+  }
+
+  return (
+    <span
+      style={{ display: "inline-flex", alignItems: "center", gap: 5, minWidth: 0 }}
+      title={niches.map((n) => n.name).join(", ")}
+    >
+      <NicheTag niche={head} size={size} />
+      {niches.length > 1 && (
+        <span style={{ fontSize: size - 0.5, color: "var(--muted)", whiteSpace: "nowrap" }}>
+          +{niches.length - 1}
+        </span>
+      )}
+    </span>
+  );
+}
+
 /** Badge trạng thái tính từ PPI. */
 export function StatusBadge({ ppi }: { ppi: number }) {
   return <span style={statusStyle(ppi)}>{statusOf(ppi).label}</span>;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { int, nicheById, pct, vShort } from "@/lib/format";
+import { int, mainNiche, pct, vShort } from "@/lib/format";
 import { cardHint, cardTitle, tnum } from "@/lib/ui";
 import { hotLevel } from "@/lib/rank";
 import type { Niche, Page } from "@/lib/types";
@@ -116,7 +116,7 @@ export default function PageSpotlight({
 
       <div style={{ borderTop: "1px solid var(--border)" }}>
         {list.map((p) => {
-          const nc = nicheById(niches, p.nicheId);
+          const nc = mainNiche(niches, p.nicheIds);
           const silent = p.posts === 0;
 
           return (

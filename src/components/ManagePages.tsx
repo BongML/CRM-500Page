@@ -2,12 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { btnGhost, btnMini, btnPrimary, cardHint, cardTitle, inputMini, select, tnum } from "@/lib/ui";
-import { int, tint } from "@/lib/format";
+import { int } from "@/lib/format";
 import { followerRank, hotLevel } from "@/lib/rank";
+import type { NicheMode } from "./CrmApp";
 import type { Group, Niche, Owner, Page, Sub } from "@/lib/types";
 import { Avatar, HotMeter, RankBadge, VisitPageButton } from "./Atoms";
 import ClassifyLegend from "./ClassifyLegend";
 import MoveConfirm, { type MoveAsk } from "./MoveConfirm";
+import NichePicker from "./NichePicker";
 
 const COLS = "34px minmax(180px,2.2fr) 84px 46px 140px 140px 150px 92px 152px";
 
@@ -20,7 +22,7 @@ export default function ManagePages({
   niches,
   groups,
   subs,
-  onAssignNiche,
+  onAssignNiches,
   onMovePage,
   onBulk,
   onDeletePages,
@@ -33,9 +35,12 @@ export default function ManagePages({
   subs: Sub[];
   /** Chỉ khác rỗng khi tài khoản tổng đang xem gộp nhiều tài khoản. */
   owners: Owner[];
-  onAssignNiche: (pageId: string, nicheId: string) => void;
+  onAssignNiches: (pageId: string, nicheIds: string[]) => void;
   onMovePage: (pageId: string, groupId: string, subId: string) => void;
-  onBulk: (ids: string[], change: { nicheId?: string; subId?: string }) => void;
+  onBulk: (
+    ids: string[],
+    change: { nicheIds?: string[]; nicheMode?: NicheMode; subId?: string },
+  ) => void;
   onDeletePages: (ids: string[]) => void;
   onDeletePage: (pageId: string) => void;
 }) {
@@ -51,7 +56,9 @@ export default function ManagePages({
   const [nicheFilter, setNicheFilter] = useState("all");
   const [groupFilter, setGroupFilter] = useState("all");
   const [picked, setPicked] = useState<Record<string, boolean>>({});
-  const [bulkNiche, setBulkNiche] = useState("");
+  const [bulkNiches, setBulkNiches] = useState<string[]>([]);
+  /** Tập ngách bulk là thay trọn, thêm vào hay gỡ ra khỏi page đã chọn. */
+  const [bulkMode, setBulkMode] = useState<NicheMode>("add");
   const [bulkSub, setBulkSub] = useState("");
   const [hotFilter, setHotFilter] = useState("all");
   /** Xóa hàng loạt không hoàn tác được — bấm lần đầu chỉ chuyển nút sang trạng thái hỏi lại. */
@@ -88,7 +95,8 @@ export default function ManagePages({
     return pages.filter(
       (p) =>
         (!term || p.name.toLowerCase().includes(term)) &&
-        (nicheFilter === "all" || p.nicheId === nicheFilter) &&
+        (nicheFilter === "all" ||
+          (nicheFilter === "none" ? p.nicheIds.length === 0 : p.nicheIds.includes(nicheFilter))) &&
         (groupFilter === "all" || p.groupId === groupFilter) &&
         (hotFilter === "all" || String(hotLevel(p.views)) === hotFilter),
     );
@@ -99,17 +107,22 @@ export default function ManagePages({
 
   function applyBulk() {
     if (!ids.length) return;
-    const change: { nicheId?: string; subId?: string } = {};
-    if (bulkNiche) change.nicheId = bulkNiche;
+    const change: { nicheIds?: string[]; nicheMode?: NicheMode; subId?: string } = {};
+    if (bulkNiches.length) {
+      change.nicheIds = bulkNiches;
+      change.nicheMode = bulkMode;
+    }
     if (bulkSub) change.subId = bulkSub;
-    if (!change.nicheId && !change.subId) return;
+    if (!change.nicheIds && !change.subId) return;
 
     onBulk(ids, change);
     setPicked({});
     setAskDelete(false);
-    setBulkNiche("");
+    setBulkNiches([]);
     setBulkSub("");
   }
+
+  const canApply = bulkNiches.length > 0 || !!bulkSub;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -135,8 +148,8 @@ export default function ManagePages({
         <div>
           <div style={cardTitle}>Gán page vào nhóm & ngách</div>
           <div style={{ ...cardHint, marginTop: 2 }}>
-            {rows.length}/{pages.length} page · đổi trực tiếp trên dòng hoặc tick nhiều dòng để gán
-            hàng loạt
+            {rows.length}/{pages.length} page · một page gán được nhiều ngách — tick trong ô Ngách,
+            hoặc chọn nhiều dòng để gán hàng loạt
           </div>
         </div>
 
@@ -149,6 +162,7 @@ export default function ManagePages({
           />
           <select value={nicheFilter} onChange={(e) => setNicheFilter(e.target.value)} style={select}>
             <option value="all">Tất cả ngách</option>
+            <option value="none">Chưa gán ngách</option>
             {niches.map((n) => (
               <option key={n.id} value={n.id}>
                 {n.name}
@@ -194,15 +208,25 @@ export default function ManagePages({
         >
           <span style={{ fontSize: 13, fontWeight: 600 }}>{ids.length} page đã chọn</span>
 
-          <select value={bulkNiche} onChange={(e) => setBulkNiche(e.target.value)} style={select}>
-            <option value="">Gán ngách…</option>
-            {niches.map((n) => (
-              <option key={n.id} value={n.id}>
-                {n.name}
-                {multi ? ` (${ownerName(n.userId)})` : ""}
-              </option>
-            ))}
+          <select
+            value={bulkMode}
+            onChange={(e) => setBulkMode(e.target.value as NicheMode)}
+            style={select}
+            aria-label="Cách áp ngách lên page đã chọn"
+          >
+            <option value="add">Thêm ngách…</option>
+            <option value="set">Thay trọn ngách bằng…</option>
+            <option value="remove">Gỡ ngách…</option>
           </select>
+
+          <div style={{ width: 210 }}>
+            <NichePicker
+              niches={niches}
+              value={bulkNiches}
+              onChange={setBulkNiches}
+              placeholder="Chọn ngách…"
+            />
+          </div>
 
           <select value={bulkSub} onChange={(e) => setBulkSub(e.target.value)} style={select}>
             <option value="">Chuyển vào nhóm…</option>
@@ -223,8 +247,8 @@ export default function ManagePages({
 
           <button
             onClick={applyBulk}
-            disabled={!bulkNiche && !bulkSub}
-            style={{ ...btnPrimary, height: 32, fontSize: 12.5, opacity: !bulkNiche && !bulkSub ? 0.55 : 1 }}
+            disabled={!canApply}
+            style={{ ...btnPrimary, height: 32, fontSize: 12.5, opacity: canApply ? 1 : 0.55 }}
           >
             Áp dụng
           </button>
@@ -306,7 +330,6 @@ export default function ManagePages({
 
       <div className="crm-scroll" style={{ maxHeight: 560, overflow: "auto" }}>
         {rows.map((p) => {
-          const niche = niches.find((n) => n.id === p.nicheId);
           const groupSubs = subs.filter((s) => s.groupId === p.groupId);
           return (
             <div
@@ -352,24 +375,11 @@ export default function ManagePages({
               <HotMeter level={hotLevel(p.views)} />
               <RankBadge rank={followerRank(p.follower)} />
 
-              <select
-                value={p.nicheId}
-                onChange={(e) => onAssignNiche(p.id, e.target.value)}
-                style={{
-                  ...select,
-                  width: "100%",
-                  color: niche?.color ?? "var(--text)",
-                  background: niche ? tint(niche.color) : "var(--surface)",
-                  fontWeight: 600,
-                }}
-                aria-label={`Ngách của ${p.name}`}
-              >
-                {ownedBy(niches, p.userId).map((n) => (
-                  <option key={n.id} value={n.id}>
-                    {n.name}
-                  </option>
-                ))}
-              </select>
+              <NichePicker
+                niches={ownedBy(niches, p.userId)}
+                value={p.nicheIds}
+                onChange={(ids) => onAssignNiches(p.id, ids)}
+              />
 
               <select
                 value={p.groupId}

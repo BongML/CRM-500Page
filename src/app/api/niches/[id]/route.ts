@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/api";
 import { refreshNiches } from "@/lib/aggregate";
+import { runBatch } from "@/lib/batch";
 import { requireScope, scopeWhere } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +10,10 @@ export const dynamic = "force-dynamic";
 /**
  * Cập nhật ngách (tên/màu/icon) và đồng bộ tập page thuộc ngách.
  * Body: { name, color, pageIds?: string[] }
+ *
+ * `pageIds` là **danh sách thành viên đầy đủ** của ngách sau khi sửa: page có
+ * trong danh sách được thêm ngách này, page đang mang ngách này mà vắng mặt thì
+ * bị gỡ ra. Các ngách khác của page không bị đụng tới — một page giữ nhiều ngách.
  */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const auth = await requireScope();
@@ -45,16 +50,30 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       return NextResponse.json({ error: "Ngách không còn tồn tại." }, { status: 404 });
     }
 
-    if (Array.isArray(pageIds) && pageIds.length) {
-      const from = await prisma.page.findMany({
-        where: { id: { in: pageIds }, userId },
-        select: { nicheId: true },
+    if (Array.isArray(pageIds)) {
+      const wanted = new Set(pageIds);
+      // Lấy cả page sắp vào lẫn page đang ở trong ngách: chỉ hai nhóm này có thể
+      // đổi trạng thái thành viên.
+      const affected = await prisma.page.findMany({
+        where: { userId, OR: [{ id: { in: pageIds } }, { nicheIds: { has: id } }] },
+        select: { id: true, nicheIds: true },
       });
-      await prisma.page.updateMany({
-        where: { id: { in: pageIds }, userId },
-        data: { nicheId: id },
-      });
-      await refreshNiches([...from.map((p) => p.nicheId), id]);
+
+      await runBatch(
+        affected
+          .filter((p) => p.nicheIds.includes(id) !== wanted.has(p.id))
+          .map((p) =>
+            prisma.page.update({
+              where: { id: p.id },
+              data: {
+                nicheIds: wanted.has(p.id)
+                  ? [...p.nicheIds, id]
+                  : p.nicheIds.filter((x) => x !== id),
+              },
+            }),
+          ),
+      );
+      await refreshNiches([id]);
     }
 
     return NextResponse.json(await prisma.niche.findUniqueOrThrow({ where: { id } }));
@@ -89,7 +108,7 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
   }
 
   const [pages, posts, trends] = await Promise.all([
-    prisma.page.count({ where: { nicheId: id, userId } }),
+    prisma.page.count({ where: { nicheIds: { has: id }, userId } }),
     prisma.topPost.count({ where: { nicheId: id, userId } }),
     prisma.trend.count({ where: { nicheId: id, userId } }),
   ]);
@@ -104,8 +123,22 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
     const target = await prisma.niche.findFirst({ where: { id: moveTo, userId } });
     if (!target) return NextResponse.json({ error: "Ngách đích không tồn tại." }, { status: 400 });
 
+    // Page: thay ngách sắp xóa bằng ngách đích ngay tại chỗ cũ trong mảng, bỏ
+    // trùng nếu page vốn đã mang sẵn ngách đích. Các ngách khác của page giữ nguyên.
+    const affected = await prisma.page.findMany({
+      where: { nicheIds: { has: id }, userId },
+      select: { id: true, nicheIds: true },
+    });
+    await runBatch(
+      affected.map((p) =>
+        prisma.page.update({
+          where: { id: p.id },
+          data: { nicheIds: [...new Set(p.nicheIds.map((x) => (x === id ? moveTo : x)))] },
+        }),
+      ),
+    );
+
     await prisma.$transaction([
-      prisma.page.updateMany({ where: { nicheId: id, userId }, data: { nicheId: moveTo } }),
       prisma.topPost.updateMany({ where: { nicheId: id, userId }, data: { nicheId: moveTo } }),
       prisma.trend.updateMany({ where: { nicheId: id, userId }, data: { nicheId: moveTo } }),
     ]);

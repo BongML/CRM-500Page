@@ -1,15 +1,18 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { refreshNiches } from "@/lib/aggregate";
+import { runBatch } from "@/lib/batch";
 import { newId } from "@/lib/auth";
 import { requireUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Tạo ngách mới + gán các page đã chọn sang ngách đó.
+ * Tạo ngách mới + gán các page đã chọn vào ngách đó.
  * Các cột agg* tính từ chính tập page được gán; ngách rỗng bắt đầu từ 0.
  * Body: { name, color, pageIds: string[] }
+ *
+ * Page **giữ nguyên** các ngách đang có: ngách mới được thêm vào tập của page
+ * chứ không thay chỗ, nên các ngách cũ không đổi số và không cần tính lại.
  */
 export async function POST(req: Request) {
   const auth = await requireUser();
@@ -53,12 +56,15 @@ export async function POST(req: Request) {
     },
   });
 
-  if (ids.length) {
-    // Các page vừa chuyển đi để lại số cũ ở ngách nguồn — tính lại toàn bộ.
-    const from = [...new Set(picked.map((p) => p.nicheId))];
-    await prisma.page.updateMany({ where: { id: { in: ids }, userId }, data: { nicheId: id } });
-    await refreshNiches(from);
-  }
+  // Mỗi page một tập ngách khác nhau nên phải ghi từng dòng, gộp lại thành ít
+  // vòng đi-về nhất có thể.
+  await runBatch(
+    picked
+      .filter((p) => !p.nicheIds.includes(id))
+      .map((p) =>
+        prisma.page.update({ where: { id: p.id }, data: { nicheIds: [...p.nicheIds, id] } }),
+      ),
+  );
 
   return NextResponse.json(await prisma.niche.findUniqueOrThrow({ where: { id } }));
 }

@@ -58,7 +58,7 @@ export default function OwnerPerformance({
       views: rows.reduce((s, r) => s + r.stats.views, 0),
       // Ngách trùng tên giữa hai tài khoản vẫn là hai bản ghi khác nhau, nên
       // tổng toàn hệ thống là số ngách đang có page, không phải tổng các dòng.
-      niches: new Set(pages.map((p) => p.nicheId)).size,
+      niches: new Set(pages.flatMap((p) => p.nicheIds)).size,
     }),
     [rows, pages],
   );

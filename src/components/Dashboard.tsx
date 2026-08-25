@@ -64,7 +64,7 @@ export default function Dashboard({
 
   /** Page trong phạm vi đang xem — mọi khối bên dưới đều tính từ đây. */
   const scoped = useMemo(
-    () => (nicheFilter ? pages.filter((p) => p.nicheId === nicheFilter) : pages),
+    () => (nicheFilter ? pages.filter((p) => p.nicheIds.includes(nicheFilter)) : pages),
     [pages, nicheFilter],
   );
 

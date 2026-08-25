@@ -183,7 +183,7 @@ async function holdingPlacer(userId: string, label: string) {
 }
 
 /** Page đã có trong hệ thống, tra được theo Profile-ID lẫn theo tên chuẩn hóa. */
-type KnownPage = { id: string; ref: string; slug: string; nicheId: string };
+type KnownPage = { id: string; ref: string; slug: string; nicheIds: string[] };
 
 /**
  * Ảnh chụp bảng Page của một tài khoản. Cả lô nhập chỉ quét **một lần** rồi
@@ -195,7 +195,7 @@ type PageIndex = KnownPage;
 const scanPages = (userId: string): Promise<PageIndex[]> =>
   prisma.page.findMany({
     where: { userId },
-    select: { id: true, ref: true, slug: true, nicheId: true },
+    select: { id: true, ref: true, slug: true, nicheIds: true },
   });
 
 async function loadKnownPages(userId: string) {
@@ -221,7 +221,7 @@ type PageOutcome = {
   updated: number;
   /** Page cũ được nhận ra nhờ tên (báo cáo trước thiếu Profile-ID). */
   matchedByName: number;
-  /** nicheId của mọi ngách bị đụng tới, để tính lại số tổng hợp. */
+  /** Id của mọi ngách bị đụng tới, để tính lại số tổng hợp. */
   touched: Set<string>;
   /** Profile-ID trong báo cáo → id thật của page trong DB. */
   idMap: Map<string, string>;
@@ -277,7 +277,7 @@ async function writePages(
       // Khớp bằng tên = báo cáo mang Profile-ID khác với ref đang lưu của page.
       if (existing.ref !== row.id) out.matchedByName++;
       if (!dryRun) updates.push(prisma.page.update({ where: { id: existing.id }, data: metrics }));
-      out.touched.add(existing.nicheId);
+      for (const id of existing.nicheIds) out.touched.add(id);
       out.updated++;
       out.idMap.set(row.id, existing.id);
       out.slugMap.set(row.slug, existing.id);
@@ -294,9 +294,9 @@ async function writePages(
     if (!dryRun) {
       // `place()` chỉ chạm DB khi phải mở nhóm mới (tối đa 1 lần / 25 page).
       const spot = await place();
-      creates.push({ id: pageId, ref: row.id, ...metrics, ...spot, nicheId, userId });
+      creates.push({ id: pageId, ref: row.id, ...metrics, ...spot, nicheIds: [nicheId], userId });
       // Page vừa tạo cũng là "đã biết" với các dòng sau trong cùng lô.
-      const fresh = { id: pageId, ref: row.id, slug: row.slug, nicheId };
+      const fresh = { id: pageId, ref: row.id, slug: row.slug, nicheIds: [nicheId] };
       known.byId.set(row.id, fresh);
       if (row.slug) known.bySlug.set(row.slug, fresh);
     }
@@ -329,7 +329,9 @@ async function writePosts(
   touched: Set<string>,
   dryRun: boolean,
 ): Promise<PostOutcome> {
-  const nicheOfPage = new Map(pages.map((p) => [p.id, p.nicheId]));
+  // TopPost chỉ mang được **một** ngách, nên bài lấy ngách chính của page
+  // (phần tử đầu trong nicheIds). Page chưa gán ngách nào thì rơi về ngách mặc định.
+  const nicheOfPage = new Map(pages.map((p) => [p.id, p.nicheIds[0]]));
   const idMap = new Map(links.idMap);
   const slugMap = new Map(links.slugMap);
   for (const p of pages) {
@@ -412,7 +414,7 @@ async function relinkOrphanPosts(
 ): Promise<number> {
   const orphans = await prisma.topPost.findMany({
     where: { userId, pageId: null },
-    select: { id: true, pageRef: true, pageSlug: true },
+    select: { id: true, pageRef: true, pageSlug: true, nicheId: true },
   });
   if (!orphans.length) return 0;
 
@@ -431,10 +433,13 @@ async function relinkOrphanPosts(
     updates.push(
       prisma.topPost.update({
         where: { id: post.id },
-        data: { pageId: page.id, nicheId: page.nicheId },
+        // Bài chỉ mang một ngách: lấy ngách chính của page, giữ nguyên ngách cũ
+        // của bài nếu page chưa được gán ngách nào.
+        data: { pageId: page.id, nicheId: page.nicheIds[0] ?? post.nicheId },
       }),
     );
-    touched.add(page.nicheId);
+    for (const id of page.nicheIds) touched.add(id);
+    touched.add(post.nicheId);
     linked++;
   }
 
@@ -723,8 +728,10 @@ async function trendsByNiche(
   const out = new Map<string, TrendRow[]>();
   if (!batches.some((b) => b.trends.length)) return out;
 
-  const byId = new Map(pages.map((p) => [p.ref, p.nicheId]));
-  const bySlug = new Map(pages.map((p) => [p.slug, p.nicheId]));
+  // Mỗi page bỏ đúng một phiếu — phiếu của ngách chính — để page nhiều ngách
+  // không kéo lệch kết quả bình chọn.
+  const byId = new Map(pages.map((p) => [p.ref, p.nicheIds[0]]));
+  const bySlug = new Map(pages.map((p) => [p.slug, p.nicheIds[0]]));
 
   for (const batch of batches) {
     if (!batch.trends.length) continue;

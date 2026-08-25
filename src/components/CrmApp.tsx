@@ -35,6 +35,27 @@ const TITLES: Record<Screen, string> = {
   manage: "Quản lý dữ liệu",
 };
 
+/** Cách áp tập ngách lên nhiều page — khớp với `nicheMode` của /api/pages/bulk. */
+export type NicheMode = "set" | "add" | "remove";
+
+/** Tập ngách mới của một page sau khi áp `mode` — bản sao phía client của server. */
+function applyNiches(current: string[], picked: string[], mode: NicheMode): string[] {
+  if (mode === "set") return picked;
+  if (mode === "remove") return current.filter((id) => !picked.includes(id));
+  return [...new Set([...current, ...picked])];
+}
+
+/** Thêm/gỡ đúng một ngách khỏi page, giữ nguyên các ngách còn lại. */
+function syncNiche(page: Page, nicheId: string, member: boolean): Page {
+  if (page.nicheIds.includes(nicheId) === member) return page;
+  return {
+    ...page,
+    nicheIds: member
+      ? [...page.nicheIds, nicheId]
+      : page.nicheIds.filter((id) => id !== nicheId),
+  };
+}
+
 async function api(url: string, method: string, body?: unknown) {
   const res = await fetch(url, {
     method,
@@ -133,7 +154,7 @@ export default function CrmApp({ initial }: { initial: Bootstrap }) {
     () =>
       pages.filter(
         (p) =>
-          (nicheFilter ? p.nicheId === nicheFilter : true) &&
+          (nicheFilter ? p.nicheIds.includes(nicheFilter) : true) &&
           (groupFilter === "all" ? true : p.groupId === groupFilter),
       ),
     [pages, nicheFilter, groupFilter],
@@ -153,12 +174,16 @@ export default function CrmApp({ initial }: { initial: Bootstrap }) {
 
   // ---- mutations (cập nhật lạc quan + ghi xuống API) ----
 
-  const changeNiche = useCallback(
-    (pageId: string, nicheId: string) => {
-      setPages((prev) => prev.map((p) => (p.id === pageId ? { ...p, nicheId } : p)));
-      api(`/api/pages/${pageId}`, "PATCH", { nicheId }).catch(fail);
+  /** Ghi đè **toàn bộ** tập ngách của một page (mảng rỗng = bỏ khỏi mọi ngách). */
+  const changeNiches = useCallback(
+    (pageId: string, nicheIds: string[]) => {
+      setPages((prev) => prev.map((p) => (p.id === pageId ? { ...p, nicheIds } : p)));
+      api(`/api/pages/${pageId}`, "PATCH", { nicheIds }).catch((e) => {
+        fail(e);
+        refresh().catch(() => undefined);
+      });
     },
-    [fail],
+    [fail, refresh],
   );
 
   const movePage = useCallback(
@@ -169,29 +194,48 @@ export default function CrmApp({ initial }: { initial: Bootstrap }) {
     [fail],
   );
 
-  const bulkAssign = useCallback(
+  /**
+   * Thanh bulk ở màn danh mục **thêm** ngách chứ không thay: page giữ nhiều
+   * ngách nên gán thêm là thao tác thường gặp, còn gỡ bớt làm ở bảng gán page.
+   */
+  const bulkAddNiche = useCallback(
     (nicheId: string) => {
       const ids = selectedIds;
       if (!ids.length) return;
-      setPages((prev) => prev.map((p) => (ids.includes(p.id) ? { ...p, nicheId } : p)));
+      setPages((prev) =>
+        prev.map((p) =>
+          ids.includes(p.id) && !p.nicheIds.includes(nicheId)
+            ? { ...p, nicheIds: [...p.nicheIds, nicheId] }
+            : p,
+        ),
+      );
       setSelected({});
-      api("/api/pages/bulk", "POST", { ids, nicheId }).catch(fail);
+      api("/api/pages/bulk", "POST", { ids, nicheIds: [nicheId], nicheMode: "add" }).catch((e) => {
+        fail(e);
+        refresh().catch(() => undefined);
+      });
     },
-    [selectedIds, fail],
+    [selectedIds, fail, refresh],
   );
 
-  /** Gán ngách / chuyển nhóm cho nhiều page từ màn quản lý. */
+  /**
+   * Gán ngách / chuyển nhóm cho nhiều page từ màn quản lý.
+   * `nicheMode` cho biết tập ngách gửi lên là thay trọn, thêm vào hay gỡ ra.
+   */
   const bulkChange = useCallback(
-    (ids: string[], change: { nicheId?: string; subId?: string }) => {
+    (ids: string[], change: { nicheIds?: string[]; nicheMode?: NicheMode; subId?: string }) => {
       if (!ids.length) return;
       const sub = change.subId ? subs.find((x) => x.id === change.subId) : undefined;
+      const mode = change.nicheMode ?? "set";
 
       setPages((prev) =>
         prev.map((p) =>
           ids.includes(p.id)
             ? {
                 ...p,
-                ...(change.nicheId ? { nicheId: change.nicheId } : {}),
+                ...(change.nicheIds
+                  ? { nicheIds: applyNiches(p.nicheIds, change.nicheIds, mode) }
+                  : {}),
                 ...(sub ? { groupId: sub.groupId, subId: sub.id } : {}),
               }
             : p,
@@ -200,7 +244,7 @@ export default function CrmApp({ initial }: { initial: Bootstrap }) {
 
       api("/api/pages/bulk", "POST", {
         ids,
-        ...(change.nicheId ? { nicheId: change.nicheId } : {}),
+        ...(change.nicheIds ? { nicheIds: change.nicheIds, nicheMode: mode } : {}),
         ...(sub ? { groupId: sub.groupId, subId: sub.id } : {}),
       }).catch((e) => {
         fail(e);
@@ -357,9 +401,9 @@ export default function CrmApp({ initial }: { initial: Bootstrap }) {
             pageIds: v.pageIds,
           });
           setNiches((prev) => prev.map((n) => (n.id === updated.id ? { ...n, ...updated } : n)));
-          setPages((prev) =>
-            prev.map((p) => (v.pageIds.includes(p.id) ? { ...p, nicheId: updated.id } : p)),
-          );
+          // Modal gửi lên danh sách thành viên đầy đủ: page vắng mặt bị gỡ ngách
+          // này ra, các ngách khác của page giữ nguyên.
+          setPages((prev) => prev.map((p) => syncNiche(p, updated.id, v.pageIds.includes(p.id))));
         } else {
           const created: Niche = await api("/api/niches", "POST", {
             name: v.name,
@@ -367,9 +411,7 @@ export default function CrmApp({ initial }: { initial: Bootstrap }) {
             pageIds: v.pageIds,
           });
           setNiches((prev) => [...prev, created]);
-          setPages((prev) =>
-            prev.map((p) => (v.pageIds.includes(p.id) ? { ...p, nicheId: created.id } : p)),
-          );
+          setPages((prev) => prev.map((p) => syncNiche(p, created.id, v.pageIds.includes(p.id))));
         }
       } catch (e) {
         fail(e);
@@ -582,7 +624,7 @@ export default function CrmApp({ initial }: { initial: Bootstrap }) {
             subs={subs}
             pages={pages}
             onImported={() => refresh().catch(fail)}
-            onAssignNiche={changeNiche}
+            onAssignNiches={changeNiches}
             onMovePage={movePage}
             onBulk={bulkChange}
             onDeletePage={deletePage}
@@ -626,7 +668,7 @@ export default function CrmApp({ initial }: { initial: Bootstrap }) {
               setScreen("catalog");
               setSelectedPageId(null);
             }}
-            onChangeNiche={(nicheId) => changeNiche(detailPage.id, nicheId)}
+            onChangeNiches={(nicheIds) => changeNiches(detailPage.id, nicheIds)}
           />
         )}
       </main>
@@ -635,7 +677,7 @@ export default function CrmApp({ initial }: { initial: Bootstrap }) {
         <BulkBar
           count={selectedIds.length}
           niches={niches}
-          onAssign={bulkAssign}
+          onAdd={bulkAddNiche}
           onDelete={() => deletePages(selectedIds)}
           onClear={() => setSelected({})}
         />
