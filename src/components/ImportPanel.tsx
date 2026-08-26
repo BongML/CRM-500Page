@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { btnGhost, btnPrimary, cardHint, cardTitle, label, select } from "@/lib/ui";
 import TemplateLinks from "./TemplateLinks";
+import { fetchLimits, uploadInParts, DEFAULT_LIMITS, type UploadLimits } from "@/lib/uploader";
 import type { Group, Niche, Sub } from "@/lib/types";
 
 /** Kết quả đọc 1 file do /api/import trả về. */
@@ -137,10 +138,12 @@ export default function ImportPanel({
 }) {
   const [files, setFiles] = useState<File[]>([]);
   const [nicheId, setNicheId] = useState("");
-  /** Trần dung lượng do server công bố; chưa hỏi được thì tạm coi là 4MB cho an toàn. */
-  const [limit, setLimit] = useState({ maxFileBytes: 4 * 1024 * 1024, maxTotalBytes: 4 * 1024 * 1024, limitMb: 4 });
+  /** Trần dung lượng + cỡ mảnh do server công bố. */
+  const [limit, setLimit] = useState<UploadLimits>(DEFAULT_LIMITS);
   /** Tiến độ khi phải chia nhiều lô: "đang gửi lô 2/3". */
   const [batch, setBatch] = useState<{ at: number; total: number } | null>(null);
+  /** Tiến độ tải từng file lên theo mảnh: "đang tải 2/5". */
+  const [sending, setSending] = useState<{ at: number; of: number } | null>(null);
   const [groupId, setGroupId] = useState("");
   const [subId, setSubId] = useState("");
   const [dragging, setDragging] = useState(false);
@@ -170,14 +173,13 @@ export default function ImportPanel({
   }
 
   useEffect(() => {
-    fetch("/api/import")
-      .then((r) => r.json())
-      .then((l: { maxFileBytes?: number; maxTotalBytes?: number; limitMb?: number }) => {
-        if (l.maxFileBytes && l.maxTotalBytes && l.limitMb) {
-          setLimit({ maxFileBytes: l.maxFileBytes, maxTotalBytes: l.maxTotalBytes, limitMb: l.limitMb });
-        }
-      })
-      .catch(() => undefined);
+    let alive = true;
+    fetchLimits().then((l) => {
+      if (alive) setLimit(l);
+    });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   async function submit(dryRun: boolean) {
@@ -203,8 +205,15 @@ export default function ImportPanel({
       for (let i = 0; i < lots.length; i++) {
         setBatch(lots.length > 1 ? { at: i + 1, total: lots.length } : null);
 
+        // Không gửi thẳng file: nền tảng chặn body request quá ~4.5MB, nên mỗi
+        // file được cắt mảnh đẩy lên trước, ở đây chỉ đưa mã để server ghép lại.
         const body = new FormData();
-        lots[i].forEach((f) => body.append("files", f));
+        for (const f of lots[i]) {
+          const id = await uploadInParts(f, limit.chunkBytes, (at, of) => setSending({ at, of }));
+          body.append("uploads", id);
+        }
+        setSending(null);
+
         if (nicheId) body.append("nicheId", nicheId);
         if (groupId === NO_SPLIT) {
           body.append("groupId", NO_SPLIT);
@@ -233,6 +242,7 @@ export default function ImportPanel({
     } finally {
       setBusy("");
       setBatch(null);
+      setSending(null);
     }
   }
 
@@ -410,9 +420,11 @@ export default function ImportPanel({
             style={{ ...btnPrimary, opacity: blocked ? 0.55 : 1 }}
           >
             {busy === "import"
-              ? batch
-                ? `Đang nhập… lô ${batch.at}/${batch.total}`
-                : "Đang nhập…"
+              ? sending && sending.of > 1
+                ? `Đang tải lên… ${sending.at}/${sending.of}`
+                : batch
+                  ? `Đang nhập… lô ${batch.at}/${batch.total}`
+                  : "Đang nhập…"
               : files.length
                 ? `Nhập ${files.length} file`
                 : "Nhập dữ liệu"}
@@ -423,9 +435,11 @@ export default function ImportPanel({
             style={{ ...btnGhost, opacity: blocked ? 0.55 : 1 }}
           >
             {busy === "check"
-              ? batch
-                ? `Đang soát… lô ${batch.at}/${batch.total}`
-                : "Đang soát…"
+              ? sending && sending.of > 1
+                ? `Đang tải lên… ${sending.at}/${sending.of}`
+                : batch
+                  ? `Đang soát… lô ${batch.at}/${batch.total}`
+                  : "Đang soát…"
               : "Kiểm tra trùng"}
           </button>
           {files.length > 0 && !busy && (

@@ -43,6 +43,7 @@ model User {
   topPosts  TopPost[]
   trends    Trend[]
   snapshots Snapshot[]
+  uploads   UploadPart[]
 }
 
 /// Ngách. Các cột agg* là số liệu cộng dồn từ chính Page[] thuộc ngách,
@@ -219,4 +220,29 @@ model Snapshot {
 
   @@index([nicheId, takenAt])
   @@index([userId, takenAt])
+}
+
+/// Một mảnh của file đang tải lên. Hàm serverless chặn body request quá ~4.5MB
+/// nên file lớn được client cắt nhỏ, gửi từng mảnh vào bảng này rồi ghép lại lúc
+/// nhập (xem lib/upload.ts). Bản ghi chỉ sống vài phút: ghép xong là xóa, mảnh
+/// mồ côi của lần tải dở bị dọn theo TTL.
+model UploadPart {
+  /// Mã cả file — client sinh, chung cho mọi mảnh của cùng một file.
+  uploadId  String
+  /// Tên file gốc, lặp ở mọi mảnh để ghép xong là biết tên mà không cần bảng riêng.
+  name      String
+  /// Thứ tự mảnh, 0-based.
+  index     Int
+  /// Tổng số mảnh của file — đủ số này mới coi là tải xong.
+  total     Int
+  /// Dung lượng mảnh, tách riêng để cộng tổng mà không phải nạp `data`.
+  size      Int
+  data      Bytes
+  id        String   @id
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+
+  @@unique([userId, uploadId, index])
+  @@index([createdAt])
 }

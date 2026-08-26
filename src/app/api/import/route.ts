@@ -8,6 +8,16 @@ import { nicheResolver } from "@/lib/niche";
 import { chunk, runBatch } from "@/lib/batch";
 import { parseReport, type MetricsRow, type PostRow, type TrendRow } from "@/lib/karmar";
 import {
+  dropUpload,
+  fromFile,
+  takeUpload,
+  uploadLimits,
+  type Incoming,
+  LIMIT_MB,
+  MAX_FILE_BYTES,
+  MAX_TOTAL_BYTES,
+} from "@/lib/upload";
+import {
   dedupePages,
   dedupePosts,
   nameClashes,
@@ -32,7 +42,9 @@ export const runtime = "nodejs";
  * nên nhập cả hai chỉ làm dày thêm dữ liệu chứ không nhân đôi page.
  *
  * Body: multipart/form-data
- *   files[]  — 1..n file .xlsx
+ *   files[]  — 1..n file .xlsx gửi thẳng (chỉ hợp với file nhỏ)
+ *   uploads  — 1..n mã file đã tải lên theo mảnh qua /api/upload; đây là đường
+ *              client dùng mặc định vì nền tảng chặn body request quá ~4.5MB
  *   nicheId  — ngách mặc định cho page mới ("" → tự tạo "Chưa phân loại")
  *   groupId  — nhóm đích cho page mới ("" → tự chia nhóm 25 page,
  *              "none" → dồn hết vào một nhóm chờ, không chia)
@@ -45,24 +57,6 @@ const GROUP_CAP = 25;
 const NO_SPLIT = "none";
 /** Tên nhóm chờ khi chọn "không chia nhóm". */
 const HOLDING_GROUP = "Chưa phân nhóm";
-const MB = 1024 * 1024;
-
-/**
- * Trần dung lượng mỗi lần gọi. Đây là giới hạn của **nền tảng**, không phải của
- * bộ đọc: hàm serverless trên Vercel chặn body request quá ~4.5MB trước khi code
- * kịp chạy, nên ở đó phải tự chặn sớm để báo lỗi tiếng Việt thay vì 413 trống.
- * Chạy ở máy nhà hoặc server thường thì không có giới hạn đó, và báo cáo Karmar
- * thật nặng 3–6MB mỗi file nên trần 4MB sẽ làm tính năng vô dụng.
- *
- * Đặt CRM_MAX_UPLOAD_MB để chỉnh tay (ví dụ khi dùng nền tảng khác).
- */
-const CONFIGURED_MB = Number(process.env.CRM_MAX_UPLOAD_MB);
-const LIMIT_MB =
-  Number.isFinite(CONFIGURED_MB) && CONFIGURED_MB > 0 ? CONFIGURED_MB : process.env.VERCEL ? 4 : 25;
-
-const MAX_FILE_BYTES = LIMIT_MB * MB;
-/** Tổng dung lượng một lần gọi — client tự chia lô theo con số này (xem GET bên dưới). */
-const MAX_TOTAL_BYTES = LIMIT_MB * MB;
 const MAX_FILES = 20;
 /** Số dòng trùng gửi kèm về client để hiển thị chi tiết. */
 const DUPLICATE_SAMPLE = 60;
@@ -545,12 +539,7 @@ async function writeSnapshot(userId: string, takenAt: Date) {
  * vì chặn người dùng bằng thông báo lỗi.
  */
 export async function GET() {
-  return NextResponse.json({
-    maxFileBytes: MAX_FILE_BYTES,
-    maxTotalBytes: MAX_TOTAL_BYTES,
-    maxFiles: MAX_FILES,
-    limitMb: LIMIT_MB,
-  });
+  return NextResponse.json({ ...uploadLimits(), maxFiles: MAX_FILES });
 }
 
 export async function POST(req: Request) {
@@ -565,16 +554,40 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Dữ liệu tải lên không hợp lệ." }, { status: 400 });
   }
 
-  const files = form.getAll("files").filter((f): f is File => f instanceof File);
-  if (!files.length) {
+  // File đến bằng hai đường: gửi thẳng (file nhỏ) hoặc đã tải lên theo mảnh.
+  // Từ đây trở đi cả hai được xử lý như nhau.
+  const sources: Incoming[] = form
+    .getAll("files")
+    .filter((f): f is File => f instanceof File)
+    .map(fromFile);
+
+  const uploadIds = form
+    .getAll("uploads")
+    .map((v) => String(v).trim())
+    .filter(Boolean);
+
+  for (const id of uploadIds) {
+    const found = await takeUpload(userId, id);
+    if (!found) {
+      return NextResponse.json(
+        { error: "Có file tải lên chưa đủ mảnh — thử chọn lại file và nhập lần nữa." },
+        { status: 400 },
+      );
+    }
+    sources.push(found);
+  }
+
+  if (!sources.length) {
     return NextResponse.json({ error: "Chưa chọn file .xlsx nào." }, { status: 400 });
   }
-  if (files.length > MAX_FILES) {
+  if (sources.length > MAX_FILES) {
     return NextResponse.json({ error: `Tối đa ${MAX_FILES} file mỗi lần nhập.` }, { status: 400 });
   }
 
-  const total = files.reduce((sum, f) => sum + f.size, 0);
+  const total = sources.reduce((sum, f) => sum + f.size, 0);
   if (total > MAX_TOTAL_BYTES) {
+    // Lô bị chặn thì trả lại chỗ ngay, đừng đợi TTL dọn.
+    await Promise.all(uploadIds.map((id) => dropUpload(userId, id)));
     const mb = (total / 1024 / 1024).toFixed(1);
     return NextResponse.json(
       { error: `Tổng dung lượng ${mb}MB vượt mức ${LIMIT_MB}MB mỗi lần gọi — chia thành nhiều lô nhỏ.` },
@@ -604,8 +617,8 @@ export async function POST(req: Request) {
   const metricBatches: Batch<MetricsRow>[] = [];
   const postBatches: (Batch<PostRow> & { trends: TrendRow[] })[] = [];
 
-  for (const file of files) {
-    const name = decodeURIComponent(file.name);
+  for (const file of sources) {
+    const name = file.name;
     const result: FileResult = {
       file: name,
       kind: null,
@@ -618,9 +631,9 @@ export async function POST(req: Request) {
 
     try {
       if (file.size > MAX_FILE_BYTES) throw new Error(`File lớn hơn ${LIMIT_MB}MB.`);
-      if (!/\.xlsx$/i.test(file.name)) throw new Error("Chỉ nhận file .xlsx.");
+      if (!/\.xlsx$/i.test(name)) throw new Error("Chỉ nhận file .xlsx.");
 
-      const report = parseReport(Buffer.from(await file.arrayBuffer()));
+      const report = parseReport(await file.read());
       const reportedAt = report.period.to;
 
       result.kind = report.kind;

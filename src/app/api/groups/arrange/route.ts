@@ -8,6 +8,14 @@ import { pageFallbackId, pageSlug } from "@/lib/karmar";
 import { nicheResolver } from "@/lib/niche";
 import { chunk, runBatch } from "@/lib/batch";
 import { parsePageList, type ListEntry } from "@/lib/pagelist";
+import {
+  dropUpload,
+  fromFile,
+  takeUpload,
+  LIMIT_MB,
+  MAX_FILE_BYTES,
+  type Incoming,
+} from "@/lib/upload";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -25,7 +33,9 @@ export const runtime = "nodejs";
  * 0, giữ đúng chỗ trong nhóm cho tới khi báo cáo Karmar về.
  *
  * Body: multipart/form-data
- *   file      — 1 file .xlsx / .csv / .txt chứa cột tên page (hoặc Profile-ID)
+ *   file      — 1 file .xlsx / .csv / .txt chứa cột tên page (hoặc Profile-ID),
+ *               gửi thẳng; hoặc `upload` — mã file đã tải lên theo mảnh qua
+ *               /api/upload (đường client dùng mặc định, xem lib/upload.ts)
  *   mode      — "auto" (mặc định) | "column" | "size"
  *   size      — số page mỗi nhóm ở mode "size" (mặc định 25)
  *   create    — "1" để tạo page mới cho dòng chưa có trong hệ thống
@@ -37,8 +47,6 @@ export const runtime = "nodejs";
  *   dryRun    — "1" để chỉ xem trước, không ghi gì xuống DB
  */
 
-/** Xem chú thích ở /api/import: Vercel chặn body request quá ~4.5MB. */
-const MAX_FILE_BYTES = 4 * 1024 * 1024;
 const MIN_SIZE = 1;
 const MAX_SIZE = 500;
 /** Số dòng không khớp / số nhóm gửi kèm về client để hiển thị. */
@@ -263,12 +271,26 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Dữ liệu tải lên không hợp lệ." }, { status: 400 });
   }
 
-  const file = form.get("file");
-  if (!(file instanceof File)) {
+  // File đến bằng hai đường: gửi thẳng (file nhỏ) hoặc đã tải lên theo mảnh.
+  const raw = form.get("file");
+  const uploadId = String(form.get("upload") ?? "").trim();
+  let file: Incoming | null = raw instanceof File ? fromFile(raw) : null;
+
+  if (!file && uploadId) {
+    file = await takeUpload(userId, uploadId);
+    if (!file) {
+      return NextResponse.json(
+        { error: "File tải lên chưa đủ mảnh — thử chọn lại file và chạy lại." },
+        { status: 400 },
+      );
+    }
+  }
+  if (!file) {
     return NextResponse.json({ error: "Chưa chọn file danh sách page." }, { status: 400 });
   }
   if (file.size > MAX_FILE_BYTES) {
-    return NextResponse.json({ error: "File lớn hơn 4MB." }, { status: 413 });
+    if (uploadId) await dropUpload(userId, uploadId);
+    return NextResponse.json({ error: `File lớn hơn ${LIMIT_MB}MB.` }, { status: 413 });
   }
 
   const rawSize = Math.round(Number(form.get("size") ?? 25));
@@ -287,13 +309,13 @@ export async function POST(req: Request) {
   const appendLeftover = String(form.get("leftover") ?? "keep") === "append";
   const prune = String(form.get("prune") ?? "") === "1";
   const dryRun = String(form.get("dryRun") ?? "") === "1";
-  const fileName = decodeURIComponent(file.name);
+  const fileName = file.name;
 
   // ---- 1. Đọc file & chọn cách chia ----
 
   let list;
   try {
-    list = parsePageList(Buffer.from(await file.arrayBuffer()), fileName);
+    list = parsePageList(await file.read(), fileName);
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Không đọc được file." },

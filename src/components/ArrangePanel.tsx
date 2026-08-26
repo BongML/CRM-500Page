@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { btnGhost, btnPrimary, cardHint, cardTitle, label, select } from "@/lib/ui";
 import type { Niche } from "@/lib/types";
 import TemplateLinks from "./TemplateLinks";
+import { fetchLimits, uploadInParts, DEFAULT_LIMITS, type UploadLimits } from "@/lib/uploader";
 
 /** Cách chia nhóm gửi lên /api/groups/arrange. */
 type Mode = "auto" | "column" | "size";
@@ -136,11 +137,25 @@ export default function ArrangePanel({
   const [prune, setPrune] = useState(true);
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState<"" | "check" | "run">("");
+  /** Trần dung lượng + cỡ mảnh do server công bố. */
+  const [limit, setLimit] = useState<UploadLimits>(DEFAULT_LIMITS);
+  /** Tiến độ tải file lên theo mảnh: "đang tải 2/5". */
+  const [sending, setSending] = useState<{ at: number; of: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ArrangeResult | null>(null);
   const picker = useRef<HTMLInputElement>(null);
 
   const blocked = !!busy || !file;
+
+  useEffect(() => {
+    let alive = true;
+    fetchLimits().then((l) => {
+      if (alive) setLimit(l);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
   /** Các tùy chọn của cách chia đều: mode "column" không dùng tới. */
   const bySize = mode !== "column";
 
@@ -161,8 +176,17 @@ export default function ArrangePanel({
     setError(null);
 
     try {
+      if (file.size > limit.maxFileBytes) {
+        throw new Error(`File lớn hơn ${limit.limitMb}MB.`);
+      }
+
+      // Không gửi thẳng file: nền tảng chặn body request quá ~4.5MB, nên file
+      // được cắt mảnh đẩy lên trước, ở đây chỉ đưa mã để server ghép lại.
+      const upload = await uploadInParts(file, limit.chunkBytes, (at, of) => setSending({ at, of }));
+      setSending(null);
+
       const body = new FormData();
-      body.append("file", file);
+      body.append("upload", upload);
       body.append("mode", mode);
       body.append("size", String(size));
       body.append("rename", rename ? "1" : "0");
@@ -184,6 +208,7 @@ export default function ArrangePanel({
       setError(e instanceof Error ? e.message : "Gom nhóm thất bại.");
     } finally {
       setBusy("");
+      setSending(null);
     }
   }
 
@@ -435,14 +460,22 @@ export default function ArrangePanel({
             disabled={blocked}
             style={{ ...btnPrimary, opacity: blocked ? 0.55 : 1 }}
           >
-            {busy === "run" ? "Đang xếp…" : "Xếp nhóm"}
+            {busy === "run"
+              ? sending && sending.of > 1
+                ? `Đang tải lên… ${sending.at}/${sending.of}`
+                : "Đang xếp…"
+              : "Xếp nhóm"}
           </button>
           <button
             onClick={() => submit(true)}
             disabled={blocked}
             style={{ ...btnGhost, opacity: blocked ? 0.55 : 1 }}
           >
-            {busy === "check" ? "Đang đọc…" : "Xem trước"}
+            {busy === "check"
+              ? sending && sending.of > 1
+                ? `Đang tải lên… ${sending.at}/${sending.of}`
+                : "Đang đọc…"
+              : "Xem trước"}
           </button>
         </div>
 
