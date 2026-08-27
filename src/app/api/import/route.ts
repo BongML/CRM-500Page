@@ -176,6 +176,30 @@ async function holdingPlacer(userId: string, label: string) {
   };
 }
 
+/**
+ * Chỗ xếp page khi người dùng chọn sẵn **một nhóm** nhưng nhóm đó chưa có
+ * sub-group nào để chỉ định: vẫn ghim đúng nhóm đã chọn và tự mở một sub-group
+ * cho lô này. Không cắt theo 25 page — người dùng đã chỉ đích danh nhóm.
+ */
+async function pinnedPlacer(userId: string, groupId: string, label: string) {
+  // Tạo trễ như holdingPlacer: lô chỉ cập nhật số liệu page cũ thì đừng để lại
+  // một sub-group rỗng.
+  let spot: { groupId: string; subId: string } | null = null;
+
+  return async function next() {
+    if (spot) return spot;
+
+    const subId = `${groupId}-${Date.now().toString(36)}`;
+    const order = await prisma.subGroup.count({ where: { groupId } });
+    await prisma.subGroup.create({
+      data: { id: subId, name: label, groupId, order, userId },
+    });
+
+    spot = { groupId, subId };
+    return spot;
+  };
+}
+
 /** Page đã có trong hệ thống, tra được theo Profile-ID lẫn theo tên chuẩn hóa. */
 type KnownPage = { id: string; ref: string; slug: string; nicheIds: string[] };
 
@@ -603,12 +627,22 @@ export async function POST(req: Request) {
   const noSplit = groupId === NO_SPLIT;
 
   let fixed: { groupId: string; subId: string } | null = null;
-  if (!noSplit && groupId && subId) {
-    const sub = await prisma.subGroup.findFirst({ where: { id: subId, userId } });
-    if (!sub || sub.groupId !== groupId) {
-      return NextResponse.json({ error: "Nhóm/sub-group đích không hợp lệ." }, { status: 400 });
+  /** Chọn nhóm mà không kèm sub-group: nhóm đó chưa có sub nào để chọn. */
+  let pinnedGroupId = "";
+  if (!noSplit && groupId) {
+    if (subId) {
+      const sub = await prisma.subGroup.findFirst({ where: { id: subId, userId } });
+      if (!sub || sub.groupId !== groupId) {
+        return NextResponse.json({ error: "Nhóm/sub-group đích không hợp lệ." }, { status: 400 });
+      }
+      fixed = { groupId, subId };
+    } else {
+      const group = await prisma.group.findFirst({ where: { id: groupId, userId } });
+      if (!group) {
+        return NextResponse.json({ error: "Nhóm/sub-group đích không hợp lệ." }, { status: 400 });
+      }
+      pinnedGroupId = groupId;
     }
-    fixed = { groupId, subId };
   }
 
   // ---- 1. Đọc toàn bộ file trước khi ghi bất cứ thứ gì ----
@@ -669,7 +703,9 @@ export async function POST(req: Request) {
     ? async () => ({ groupId: "", subId: "" })
     : noSplit
       ? await holdingPlacer(userId, label)
-      : await placer(userId, fixed, label);
+      : pinnedGroupId
+        ? await pinnedPlacer(userId, pinnedGroupId, label)
+        : await placer(userId, fixed, label);
 
   const pageOut = await writePages(userId, pageDedupe.merged, known, place, defaultNiche, dryRun);
 

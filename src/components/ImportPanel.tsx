@@ -153,9 +153,13 @@ export default function ImportPanel({
   const picker = useRef<HTMLInputElement>(null);
 
   const groupSubs = subs.filter((s) => s.groupId === groupId);
-  /** Chọn một nhóm cụ thể mới cần chỉ định sub-group; "không chia nhóm" thì không. */
-  const needSub = !!groupId && groupId !== NO_SPLIT;
-  const blocked = !!busy || files.length === 0 || (!!groupId && !subId);
+  /**
+   * Chọn một nhóm cụ thể mới cần chỉ định sub-group; "không chia nhóm" thì không.
+   * Nhóm chưa có sub-group nào cũng không hỏi — server tự mở một sub cho lô này,
+   * nếu không thì nút nhập kẹt mờ mà người dùng không có gì để chọn.
+   */
+  const needSub = !!groupId && groupId !== NO_SPLIT && groupSubs.length > 0;
+  const blocked = !!busy || files.length === 0 || (needSub && !subId);
 
   function addFiles(list: FileList | null) {
     if (!list?.length) return;
@@ -217,9 +221,9 @@ export default function ImportPanel({
         if (nicheId) body.append("nicheId", nicheId);
         if (groupId === NO_SPLIT) {
           body.append("groupId", NO_SPLIT);
-        } else if (groupId && subId) {
+        } else if (groupId) {
           body.append("groupId", groupId);
-          body.append("subId", subId);
+          if (subId) body.append("subId", subId);
         }
         if (dryRun) body.append("dryRun", "1");
 
