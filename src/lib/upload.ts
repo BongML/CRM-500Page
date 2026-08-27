@@ -5,21 +5,21 @@ import { newId } from "@/lib/auth";
  * Nhận file lớn qua nhiều mảnh.
  *
  * Vì sao phải cắt: hàm serverless (Vercel) chặn **body mỗi request** quá ~4.5MB
- * trước khi code kịp chạy, nên gửi thẳng một file 6–20MB là hỏng bất kể trần
+ * trước khi code kịp chạy, nên gửi thẳng một file 6–50MB là hỏng bất kể trần
  * của ứng dụng đặt bao nhiêu. Client cắt file thành mảnh nhỏ hơn con số đó
  * (CHUNK_BYTES), gửi lần lượt vào bảng UploadPart, rồi báo mã `uploadId` cho
  * /api/import hoặc /api/groups/arrange; ở đó các mảnh được ghép lại thành file
  * gốc và xóa ngay.
  *
  * Trần dung lượng vì thế là trần của **ứng dụng** chứ không còn của nền tảng:
- * mặc định 20MB, chỉnh bằng CRM_MAX_UPLOAD_MB.
+ * mặc định 50MB, chỉnh bằng CRM_MAX_UPLOAD_MB.
  */
 
 const MB = 1024 * 1024;
 
 const CONFIGURED_MB = Number(process.env.CRM_MAX_UPLOAD_MB);
 export const LIMIT_MB =
-  Number.isFinite(CONFIGURED_MB) && CONFIGURED_MB > 0 ? CONFIGURED_MB : 20;
+  Number.isFinite(CONFIGURED_MB) && CONFIGURED_MB > 0 ? CONFIGURED_MB : 50;
 
 /** Trần mỗi file. */
 export const MAX_FILE_BYTES = LIMIT_MB * MB;

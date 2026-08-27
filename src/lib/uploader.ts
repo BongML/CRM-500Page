@@ -20,9 +20,9 @@ export type UploadLimits = {
 const MB = 1024 * 1024;
 
 export const DEFAULT_LIMITS: UploadLimits = {
-  limitMb: 20,
-  maxFileBytes: 20 * MB,
-  maxTotalBytes: 20 * MB,
+  limitMb: 50,
+  maxFileBytes: 50 * MB,
+  maxTotalBytes: 50 * MB,
   chunkBytes: 3 * MB,
 };
 
